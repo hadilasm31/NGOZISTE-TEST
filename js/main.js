@@ -1,18 +1,15 @@
 /**
  * MAIN.JS - Script principal pour toutes les pages
- * Version complète avec toutes les fonctionnalités
+ * Ngozistes du Royaume - Version complète
  */
-
-// ==================== INITIALISATION SUPABASE ====================
-const supabaseUrl = 'https://gkvtwxnddpgoyrpedhua.supabase.co';
-const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImdrdnR3eG5kZHBnb3lycGVkaHVhIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzE5ODA0MzAsImV4cCI6MjA4NzU1NjQzMH0.iTSfiOGCFky2fk6JXubFRBK8A0sVGfqMqALzD0og1KM';
-const supabase = window.supabase.createClient(supabaseUrl, supabaseKey);
 
 // ==================== VARIABLES GLOBALES ====================
 let currentUser = null;
 
 // ==================== INITIALISATION ====================
 document.addEventListener('DOMContentLoaded', async function() {
+    console.log('Main.js initialisé');
+    
     initMobileMenu();
     await checkCurrentUser();
     initVideoControls();
@@ -71,14 +68,14 @@ function initMobileMenu() {
 // ==================== GESTION AUTHENTIFICATION ====================
 async function checkCurrentUser() {
     try {
-        const { data: { user }, error } = await supabase.auth.getUser();
+        const { data: { user }, error } = await window.supabase.auth.getUser();
         
         if (error || !user) {
             updateAuthMenu(null);
             return;
         }
 
-        const { data: userData, error: userError } = await supabase
+        const { data: userData, error: userError } = await window.supabase
             .from('users')
             .select('*')
             .eq('id', user.id)
@@ -89,7 +86,6 @@ async function checkCurrentUser() {
         currentUser = { ...user, ...userData };
         updateAuthMenu(currentUser);
         
-        // Sauvegarder dans localStorage pour synchro entre onglets
         try {
             localStorage.setItem('user_display', JSON.stringify({
                 photo: currentUser.photo || 'images/default-avatar.png',
@@ -188,10 +184,11 @@ window.toggleUserDropdown = function(event) {
 
 window.logout = async function() {
     try {
-        await supabase.auth.signOut();
+        await window.supabase.auth.signOut();
         currentUser = null;
         try {
             localStorage.removeItem('user_display');
+            localStorage.removeItem('rememberedEmail');
         } catch (e) {}
         window.location.href = 'index.html';
     } catch (error) {
@@ -457,7 +454,7 @@ async function loadTimeline() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('content_pages')
             .select('content')
             .eq('page', 'apropos')
@@ -504,7 +501,7 @@ async function loadValues() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('content_pages')
             .select('content')
             .eq('page', 'apropos')
@@ -549,7 +546,7 @@ async function loadPastEvents() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('events')
             .select('*')
             .lt('date', new Date().toISOString())
@@ -589,7 +586,7 @@ async function loadGallery() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('gallery')
             .select('*')
             .order('created_at', { ascending: false })
@@ -620,7 +617,7 @@ async function loadUpcomingEvents() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('events')
             .select('*')
             .gte('date', new Date().toISOString())
@@ -664,10 +661,10 @@ async function loadStatistics() {
     
     try {
         const promises = [
-            supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'member'),
-            supabase.from('events').select('*', { count: 'exact', head: true }),
-            supabase.from('activities').select('*', { count: 'exact', head: true }),
-            supabase.from('users').select('ville', { count: 'exact', head: true }).not('ville', 'is', null)
+            window.supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'member'),
+            window.supabase.from('events').select('*', { count: 'exact', head: true }),
+            window.supabase.from('activities').select('*', { count: 'exact', head: true }),
+            window.supabase.from('users').select('ville', { count: 'exact', head: true }).not('ville', 'is', null)
         ];
 
         const [members, events, activities, cities] = await Promise.all(promises);
@@ -719,7 +716,7 @@ async function loadHistory() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('content_pages')
             .select('content')
             .eq('page', 'apropos')
@@ -744,7 +741,7 @@ async function loadOrganization() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('content_pages')
             .select('content')
             .eq('page', 'apropos')
@@ -769,7 +766,7 @@ async function loadDetailedTimeline() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('content_pages')
             .select('content')
             .eq('page', 'apropos')
@@ -816,7 +813,7 @@ async function loadTeam() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('team')
             .select('*')
             .order('display_order', { ascending: true });
@@ -868,7 +865,7 @@ async function loadActivities(category) {
     container.innerHTML = '<div class="loading">Chargement des activités...</div>';
     
     try {
-        let query = supabase.from('activities').select('*');
+        let query = window.supabase.from('activities').select('*');
         
         if (category && category !== 'all') {
             query = query.eq('category', category);
@@ -889,7 +886,7 @@ async function loadActivities(category) {
                     <div class="activity-card">
                         <div class="activity-image">
                             <img src="${activityImage}" alt="${activity.title}" onclick="openLightbox('${activityImage}')" onerror="this.src='images/activities/default.jpg'">
-                            <span class="activity-category">${activity.category || 'Général'}</span>
+                            <span class="activity-category">${window.getCategoryLabel(activity.category)}</span>
                         </div>
                         <div class="activity-content">
                             <div class="activity-date">
@@ -928,7 +925,7 @@ async function loadReports() {
     if (!container) return;
     
     try {
-        const { data, error } = await supabase
+        const { data, error } = await window.supabase
             .from('activity_reports')
             .select(`
                 *,
@@ -984,7 +981,7 @@ async function loadReports() {
 
 window.showActivityDetails = async function(activityId) {
     try {
-        const { data: activity, error } = await supabase
+        const { data: activity, error } = await window.supabase
             .from('activities')
             .select('*')
             .eq('id', activityId)
@@ -993,7 +990,7 @@ window.showActivityDetails = async function(activityId) {
         if (error) throw error;
 
         if (activity) {
-            const { data: reports } = await supabase
+            const { data: reports } = await window.supabase
                 .from('activity_reports')
                 .select('*')
                 .eq('activity_id', activityId);
@@ -1001,7 +998,7 @@ window.showActivityDetails = async function(activityId) {
             let message = `📋 ${activity.title}\n\n`;
             message += `📅 Date: ${new Date(activity.date).toLocaleDateString('fr-FR')}\n`;
             if (activity.location) message += `📍 Lieu: ${activity.location}\n`;
-            message += `🏷️ Catégorie: ${activity.category || 'Général'}\n\n`;
+            message += `🏷️ Catégorie: ${window.getCategoryLabel(activity.category)}\n\n`;
             message += `📝 Description:\n${activity.description || 'Description à venir'}\n\n`;
             
             if (reports && reports.length > 0) {
@@ -1029,7 +1026,7 @@ async function loadEvents(type) {
     if (!upcomingContainer && !pastContainer) return;
     
     try {
-        let query = supabase.from('events').select('*').eq('status', 'published');
+        let query = window.supabase.from('events').select('*').eq('status', 'published');
         const now = new Date().toISOString();
         
         if (type === 'upcoming') {
@@ -1121,7 +1118,7 @@ window.showEventDetails = async function(eventId) {
     if (!modal) return;
     
     try {
-        const { data: event, error } = await supabase
+        const { data: event, error } = await window.supabase
             .from('events')
             .select('*')
             .eq('id', eventId)
@@ -1183,7 +1180,7 @@ window.registerToEvent = async function(e) {
     const message = document.getElementById('message').value;
     
     try {
-        const { error } = await supabase
+        const { error } = await window.supabase
             .from('event_registrations')
             .insert([{
                 event_id: window.selectedEventId,
@@ -1200,8 +1197,7 @@ window.registerToEvent = async function(e) {
                 throw error;
             }
         } else {
-            // Mettre à jour le compteur de participants
-            await supabase.rpc('increment_event_participants', { 
+            await window.supabase.rpc('increment_event_participants', { 
                 event_id: window.selectedEventId, 
                 increment: 1 + guests 
             });
@@ -1398,4 +1394,25 @@ window.confirmAction = function(message, callback) {
     if (confirm(message)) {
         callback();
     }
+};
+
+window.getCategoryLabel = function(category) {
+    const labels = {
+        'environnement': 'Environnement',
+        'social': 'Social',
+        'culture': 'Culture',
+        'education': 'Éducation',
+        'general': 'Général',
+        'autre': 'Autre'
+    };
+    return labels[category] || 'Général';
+};
+
+// ==================== EXPORTS ====================
+window.mainHelpers = {
+    truncateText,
+    formatDate,
+    showToast,
+    confirmAction,
+    getCategoryLabel
 };
