@@ -1,8 +1,6 @@
 <!DOCTYPE html>
 <html lang="fr">
-    
 <head>
-    
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Connexion - Ngozistes du Royaume</title>
@@ -13,45 +11,8 @@
     <!-- Configuration Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="supabase-config.js"></script>
-    <script>
-    // Enregistrer le service worker
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(registration => {
-                    console.log('ServiceWorker enregistré:', registration.scope);
-                })
-                .catch(error => {
-                    console.log('Erreur ServiceWorker:', error);
-                });
-        });
-    }
-
-    // Détection de la connexion
-    function checkConnection() {
-        if (!navigator.onLine) {
-            window.location.href = 'offline.html';
-        }
-    }
-
-    // Vérifier au chargement
-    window.addEventListener('load', checkConnection);
-
-    // Vérifier quand la connexion change
-    window.addEventListener('offline', () => {
-        window.location.href = 'offline.html';
-    });
-
-    window.addEventListener('online', () => {
-        console.log('Connexion rétablie');
-    });
-
-    // Vérification périodique
-    setInterval(checkConnection, 30000); // Toutes les 30 secondes
-</script>
     
     <style>
-        /* Mêmes styles que votre login.html existant */
         * {
             margin: 0;
             padding: 0;
@@ -158,6 +119,127 @@
             width: 100%;
             height: 2px;
             background: var(--primary-color);
+        }
+
+        /* Profil utilisateur */
+        .user-profile {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            cursor: pointer;
+            padding: 5px 15px;
+            border-radius: 50px;
+            background: var(--light-color);
+            transition: var(--transition);
+        }
+
+        .user-profile:hover {
+            background: #e0e0e0;
+        }
+
+        .nav-avatar {
+            width: 35px;
+            height: 35px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--primary-color);
+        }
+
+        .user-name {
+            font-weight: 500;
+            color: var(--dark-color);
+        }
+
+        .user-profile i {
+            font-size: 0.8rem;
+            color: var(--text-color);
+        }
+
+        /* Dropdown utilisateur */
+        .user-dropdown {
+            position: fixed;
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            min-width: 250px;
+            z-index: 2000;
+            animation: slideDown 0.3s ease;
+            display: none;
+        }
+
+        .user-dropdown.show {
+            display: block;
+        }
+
+        @keyframes slideDown {
+            from {
+                opacity: 0;
+                transform: translateY(-10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .user-dropdown-header {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+        }
+
+        .user-dropdown-header img {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid var(--primary-color);
+        }
+
+        .user-dropdown-info {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .user-dropdown-info span {
+            font-weight: 600;
+            color: var(--dark-color);
+        }
+
+        .user-dropdown-info small {
+            color: var(--text-color);
+            font-size: 0.8rem;
+        }
+
+        .user-dropdown-menu {
+            padding: 10px 0;
+        }
+
+        .user-dropdown-menu a {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            color: var(--text-color);
+            text-decoration: none;
+            transition: var(--transition);
+        }
+
+        .user-dropdown-menu a:hover {
+            background: var(--light-color);
+            color: var(--primary-color);
+        }
+
+        .user-dropdown-menu a i {
+            width: 20px;
+        }
+
+        .dropdown-divider {
+            height: 1px;
+            background: #eee;
+            margin: 8px 0;
         }
 
         /* Boutons */
@@ -515,7 +597,23 @@
             color: var(--primary-color);
         }
 
-        /* Responsive (simplifié) */
+        /* Toast Notification */
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            z-index: 3000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+
+        /* Responsive */
         @media screen and (max-width: 768px) {
             body { padding-top: 70px; }
             .navbar { height: 70px; }
@@ -542,6 +640,11 @@
             .nav-menu li { margin: 15px 0; }
             
             .login-container { margin: 0 20px; padding: 30px 20px; }
+            
+            .user-profile { padding: 5px; }
+            .user-name { display: none; }
+            .user-profile i { display: none; }
+            .nav-avatar { width: 40px; height: 40px; }
         }
 
         @media screen and (max-width: 480px) {
@@ -567,7 +670,9 @@
                 <li><a href="activites.html">Activités</a></li>
                 <li><a href="evenements.html">Événements</a></li>
                 <li><a href="adhesion.html" class="btn-adhesion">Adhérer</a></li>
-                <li><a href="login.html" class="btn-login active"><i class="fas fa-user"></i> Connexion</a></li>
+                <li id="auth-menu">
+                    <a href="login.html" class="btn-login active"><i class="fas fa-user"></i> Connexion</a>
+                </li>
             </ul>
             <div class="hamburger" id="hamburger">
                 <span></span>
@@ -576,6 +681,9 @@
             </div>
         </nav>
     </header>
+
+    <!-- Dropdown utilisateur -->
+    <div class="user-dropdown" id="user-dropdown"></div>
 
     <section class="login-section">
         <div class="login-container">
@@ -647,44 +755,187 @@
     </footer>
 
     <script>
+        // ==================== VARIABLES GLOBALES ====================
+        let currentUser = null;
+
+        // ==================== INITIALISATION ====================
+        document.addEventListener('DOMContentLoaded', async function() {
+            initMobileMenu();
+            initTogglePassword();
+            initForgotPassword();
+            initRememberedEmail();
+            await checkCurrentUser();
+            addShakeAnimation();
+        });
+
         // ==================== MENU MOBILE ====================
-        const hamburger = document.getElementById('hamburger');
-        const navMenu = document.getElementById('nav-menu');
-        
-        if (hamburger && navMenu) {
-            hamburger.addEventListener('click', () => {
-                hamburger.classList.toggle('active');
-                navMenu.classList.toggle('active');
-                document.body.classList.toggle('menu-open');
-            });
+        function initMobileMenu() {
+            const hamburger = document.getElementById('hamburger');
+            const navMenu = document.getElementById('nav-menu');
+            
+            if (hamburger && navMenu) {
+                hamburger.addEventListener('click', () => {
+                    hamburger.classList.toggle('active');
+                    navMenu.classList.toggle('active');
+                    document.body.classList.toggle('menu-open');
+                });
+
+                document.querySelectorAll('.nav-menu a').forEach(link => {
+                    link.addEventListener('click', () => {
+                        hamburger.classList.remove('active');
+                        navMenu.classList.remove('active');
+                        document.body.classList.remove('menu-open');
+                    });
+                });
+            }
         }
 
         // ==================== TOGGLE MOT DE PASSE ====================
-        document.getElementById('togglePassword')?.addEventListener('click', function() {
-            const password = document.getElementById('password');
-            const icon = document.getElementById('togglePasswordIcon');
-            
-            if (password.type === 'password') {
-                password.type = 'text';
-                icon.className = 'fas fa-eye-slash';
-            } else {
-                password.type = 'password';
-                icon.className = 'fas fa-eye';
+        function initTogglePassword() {
+            const toggleBtn = document.getElementById('togglePassword');
+            if (toggleBtn) {
+                toggleBtn.addEventListener('click', function() {
+                    const password = document.getElementById('password');
+                    const icon = document.getElementById('togglePasswordIcon');
+                    
+                    if (password.type === 'password') {
+                        password.type = 'text';
+                        icon.className = 'fas fa-eye-slash';
+                    } else {
+                        password.type = 'password';
+                        icon.className = 'fas fa-eye';
+                    }
+                });
             }
-        });
+        }
 
         // ==================== MOT DE PASSE OUBLIÉ ====================
-        document.getElementById('forgotPassword')?.addEventListener('click', function(e) {
-            e.preventDefault();
-            window.showToast('Veuillez contacter l\'administrateur pour réinitialiser votre mot de passe', 'info');
-        });
+        function initForgotPassword() {
+            const forgotLink = document.getElementById('forgotPassword');
+            if (forgotLink) {
+                forgotLink.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    window.showToast('Veuillez contacter l\'administrateur pour réinitialiser votre mot de passe', 'info');
+                });
+            }
+        }
 
         // ==================== EMAIL SAUVEGARDÉ ====================
-        const rememberedEmail = localStorage.getItem('rememberedEmail');
-        if (rememberedEmail) {
-            document.getElementById('email').value = rememberedEmail;
-            document.getElementById('remember').checked = true;
+        function initRememberedEmail() {
+            const rememberedEmail = localStorage.getItem('rememberedEmail');
+            if (rememberedEmail) {
+                document.getElementById('email').value = rememberedEmail;
+                document.getElementById('remember').checked = true;
+            }
         }
+
+        // ==================== VÉRIFICATION UTILISATEUR CONNECTÉ ====================
+        async function checkCurrentUser() {
+            try {
+                if (typeof window.supabase === 'undefined') {
+                    console.warn('Supabase non initialisé');
+                    return;
+                }
+
+                const { data: { session } } = await window.supabase.auth.getSession();
+                
+                if (session?.user) {
+                    const { data: userData } = await window.supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
+                    
+                    if (userData) {
+                        currentUser = userData;
+                        updateAuthMenu(userData);
+                        showAlert(`Vous êtes déjà connecté en tant que ${userData.prenom || ''}. Redirection...`, 'info');
+                        
+                        setTimeout(() => redirectBasedOnRole(userData.role), 2000);
+                    }
+                } else {
+                    updateAuthMenu(null);
+                }
+            } catch (error) {
+                console.error('Erreur lors de la vérification de l\'utilisateur:', error);
+                updateAuthMenu(null);
+            }
+        }
+
+        // ==================== MISE À JOUR DU MENU AUTH ====================
+        function updateAuthMenu(user) {
+            const authMenu = document.getElementById('auth-menu');
+            if (!authMenu) return;
+
+            if (user) {
+                const photo = user.photo || 'images/default-avatar.png';
+                const fullName = `${user.prenom || ''} ${user.nom || ''}`.trim() || 'Utilisateur';
+                
+                authMenu.innerHTML = `
+                    <div class="user-profile" onclick="window.toggleUserDropdown(event)">
+                        <img src="${photo}" alt="Profil" class="nav-avatar" id="nav-avatar" onerror="this.src='images/default-avatar.png'">
+                        <span class="user-name">${fullName.split(' ')[0]}</span>
+                        <i class="fas fa-chevron-down"></i>
+                    </div>
+                `;
+            } else {
+                authMenu.innerHTML = `
+                    <a href="login.html" class="btn-login active">
+                        <i class="fas fa-user"></i> Connexion
+                    </a>
+                `;
+            }
+        }
+
+        // ==================== TOGGLE DROPDOWN UTILISATEUR ====================
+        window.toggleUserDropdown = function(event) {
+            event.stopPropagation();
+            
+            let dropdown = document.getElementById('user-dropdown');
+            if (!dropdown) return;
+
+            if (!currentUser) return;
+
+            const dashboardPath = currentUser.role === 'admin' || currentUser.role === 'super_admin' ? 'admin' : 'member';
+            
+            dropdown.innerHTML = `
+                <div class="user-dropdown-header">
+                    <img src="${currentUser.photo || 'images/default-avatar.png'}" alt="Avatar" onerror="this.src='images/default-avatar.png'">
+                    <div class="user-dropdown-info">
+                        <span>${currentUser.prenom || ''} ${currentUser.nom || ''}</span>
+                        <small>${currentUser.role === 'super_admin' ? 'Super Admin' : (currentUser.role === 'admin' ? 'Admin' : 'Membre')}</small>
+                    </div>
+                </div>
+                <div class="user-dropdown-menu">
+                    <a href="#" onclick="window.location.href='${dashboardPath}/dashboard.html'">
+                        <i class="fas fa-tachometer-alt"></i> Tableau de bord
+                    </a>
+                    <a href="#" onclick="window.location.href='${dashboardPath}/dashboard.html?panel=profile'">
+                        <i class="fas fa-user"></i> Mon profil
+                    </a>
+                    <div class="dropdown-divider"></div>
+                    <a href="#" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Déconnexion
+                    </a>
+                </div>
+            `;
+
+            const rect = event.target.closest('.user-profile')?.getBoundingClientRect();
+            if (rect) {
+                dropdown.style.top = (rect.bottom + 10) + 'px';
+                dropdown.style.right = (window.innerWidth - rect.right) + 'px';
+                dropdown.classList.add('show');
+            }
+
+            setTimeout(() => {
+                document.addEventListener('click', function closeDropdown(e) {
+                    if (!dropdown.contains(e.target) && !event.target.closest('.user-profile')) {
+                        dropdown.classList.remove('show');
+                        document.removeEventListener('click', closeDropdown);
+                    }
+                });
+            }, 100);
+        };
 
         // ==================== GESTION DE LA CONNEXION ====================
         document.getElementById('login-form')?.addEventListener('submit', async function(e) {
@@ -698,9 +949,12 @@
             
             // Validation
             if (!email || !password) {
-                alertDiv.textContent = 'Veuillez remplir tous les champs';
-                alertDiv.className = 'alert error';
-                alertDiv.style.display = 'block';
+                showAlert('Veuillez remplir tous les champs', 'error');
+                return;
+            }
+            
+            if (!validateEmail(email)) {
+                showAlert('Veuillez entrer une adresse email valide', 'error');
                 return;
             }
             
@@ -715,9 +969,7 @@
                 });
                 
                 if (error) {
-                    alertDiv.textContent = 'Email ou mot de passe incorrect';
-                    alertDiv.className = 'alert error';
-                    alertDiv.style.display = 'block';
+                    showAlert('Email ou mot de passe incorrect', 'error');
                     
                     loginBtn.disabled = false;
                     loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
@@ -747,9 +999,7 @@
                 // Vérifier le statut
                 if (userData.role === 'pending') {
                     await window.supabase.auth.signOut();
-                    alertDiv.textContent = 'Votre compte est en attente de validation';
-                    alertDiv.className = 'alert info';
-                    alertDiv.style.display = 'block';
+                    showAlert('Votre compte est en attente de validation par un administrateur', 'info');
                     
                     loginBtn.disabled = false;
                     loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
@@ -758,14 +1008,18 @@
                 
                 if (userData.status === 'inactive') {
                     await window.supabase.auth.signOut();
-                    alertDiv.textContent = 'Votre compte a été désactivé';
-                    alertDiv.className = 'alert error';
-                    alertDiv.style.display = 'block';
+                    showAlert('Votre compte a été désactivé. Contactez un administrateur.', 'error');
                     
                     loginBtn.disabled = false;
                     loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
                     return;
                 }
+                
+                // Mettre à jour la dernière connexion
+                await window.supabase
+                    .from('users')
+                    .update({ last_login: new Date().toISOString() })
+                    .eq('id', data.user.id);
                 
                 // Sauvegarder l'email
                 if (remember) {
@@ -774,42 +1028,138 @@
                     localStorage.removeItem('rememberedEmail');
                 }
                 
+                // Sauvegarder les infos pour la synchro entre onglets
+                try {
+                    localStorage.setItem('user_display', JSON.stringify({
+                        photo: userData.photo || 'images/default-avatar.png',
+                        name: `${userData.prenom || ''} ${userData.nom || ''}`.trim(),
+                        role: userData.role,
+                        dashboard: userData.role === 'admin' || userData.role === 'super_admin' ? 'admin' : 'member'
+                    }));
+                } catch (e) {
+                    console.warn('Impossible de sauvegarder user_display');
+                }
+                
                 // Message de succès
-                alertDiv.textContent = `Connexion réussie ! Bienvenue ${userData.prenom || ''}`;
-                alertDiv.className = 'alert success';
-                alertDiv.style.display = 'block';
+                showAlert(`Connexion réussie ! Bienvenue ${userData.prenom || ''}`, 'success');
                 
                 // Redirection
                 setTimeout(() => {
-                    if (userData.role === 'admin' || userData.role === 'super_admin') {
-                        window.location.href = 'admin/dashboard.html';
-                    } else {
-                        window.location.href = 'member/dashboard.html';
-                    }
+                    redirectBasedOnRole(userData.role);
                 }, 1500);
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                alertDiv.textContent = 'Une erreur est survenue';
-                alertDiv.className = 'alert error';
-                alertDiv.style.display = 'block';
+                showAlert('Une erreur est survenue. Veuillez réessayer.', 'error');
                 
                 loginBtn.disabled = false;
                 loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
             }
         });
 
-        // Ajouter l'animation shake
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes shake {
-                0%, 100% { transform: translateX(0); }
-                10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
-                20%, 40%, 60%, 80% { transform: translateX(5px); }
+        // ==================== REDIRECTION SELON RÔLE ====================
+        function redirectBasedOnRole(role) {
+            console.log('Redirection pour rôle:', role);
+            
+            if (role === 'admin' || role === 'super_admin') {
+                window.location.href = 'admin/dashboard.html';
+            } else if (role === 'member') {
+                window.location.href = 'member/dashboard.html';
+            } else {
+                window.location.href = 'index.html';
             }
-            .shake { animation: shake 0.5s ease-in-out; }
-        `;
-        document.head.appendChild(style);
+        }
+
+        // ==================== FONCTIONS UTILITAIRES ====================
+        function showAlert(message, type) {
+            const alertDiv = document.getElementById('login-alert');
+            if (!alertDiv) return;
+            
+            alertDiv.textContent = message;
+            alertDiv.className = `alert ${type}`;
+            alertDiv.style.display = 'block';
+            
+            // Auto-cacher après 5 secondes pour les succès, 10 pour les erreurs
+            const timeout = type === 'error' ? 10000 : 5000;
+            setTimeout(() => {
+                if (alertDiv.style.display === 'block') {
+                    alertDiv.style.display = 'none';
+                }
+            }, timeout);
+        }
+
+        function validateEmail(email) {
+            const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            return re.test(email);
+        }
+
+        function addShakeAnimation() {
+            if (document.querySelector('#shake-animation')) return;
+            
+            const style = document.createElement('style');
+            style.id = 'shake-animation';
+            style.textContent = `
+                @keyframes shake {
+                    0%, 100% { transform: translateX(0); }
+                    10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+                    20%, 40%, 60%, 80% { transform: translateX(5px); }
+                }
+                .shake { animation: shake 0.5s ease-in-out; }
+            `;
+            document.head.appendChild(style);
+        }
+
+        // ==================== TOAST NOTIFICATION ====================
+        window.showToast = function(message, type = 'info', duration = 3000) {
+            const oldToast = document.querySelector('.toast-notification');
+            if (oldToast) oldToast.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            document.body.appendChild(toast);
+            
+            const colors = {
+                success: '#4CAF50',
+                error: '#f44336',
+                warning: '#ff9800',
+                info: '#2196F3'
+            };
+            
+            toast.style.backgroundColor = colors[type] || colors.info;
+            toast.textContent = message;
+            
+            // Force reflow
+            toast.offsetHeight;
+            toast.style.opacity = '1';
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        };
+
+        // ==================== DÉCONNEXION ====================
+        window.logout = async function() {
+            try {
+                await window.supabase.auth.signOut();
+                currentUser = null;
+                localStorage.removeItem('user_display');
+                localStorage.removeItem('rememberedEmail');
+                window.location.href = 'index.html';
+            } catch (error) {
+                console.error('Erreur déconnexion:', error);
+            }
+        };
+
+        // ==================== GESTION DES CLICS EXTERNES ====================
+        document.addEventListener('click', function(e) {
+            const dropdown = document.getElementById('user-dropdown');
+            const userProfile = document.querySelector('.user-profile');
+            
+            if (dropdown && userProfile && !userProfile.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.remove('show');
+            }
+        });
     </script>
 </body>
 </html>
