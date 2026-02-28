@@ -1,6 +1,6 @@
 /**
  * LOGIN.JS - Gestionnaire de la page de connexion
- * Ngozistes du Royaume - VERSION COMPLÈTE CORRIGÉE
+ * Ngozistes du Royaume
  */
 
 // Attendre que le DOM soit chargé
@@ -55,27 +55,16 @@ function initLoginPage() {
  */
 async function checkCurrentUser() {
     try {
-        // CORRECTION : Utiliser window.supabase au lieu de window.supabaseClient
-        if (typeof window.supabase === 'undefined') {
-            console.warn('supabase non initialisé');
+        // Vérifier si window.supabaseClient existe
+        if (typeof window.supabaseClient === 'undefined') {
+            console.warn('supabaseClient non initialisé');
             return;
         }
 
-        const { data: { session } } = await window.supabase.auth.getSession();
-        
-        if (session?.user) {
-            const { data: userData } = await window.supabase
-                .from('users')
-                .select('*')
-                .eq('id', session.user.id)
-                .single();
-            
-            if (userData) {
-                showAlert(`Vous êtes déjà connecté en tant que ${userData.prenom || ''}. Redirection...`, 'info');
-                
-                // CORRECTION : Utiliser la fonction corrigée
-                setTimeout(() => redirectBasedOnRole(userData.role), 2000);
-            }
+        const userResult = await window.supabaseClient.getCurrentUser();
+        if (userResult.user) {
+            showAlert('Vous êtes déjà connecté. Redirection...', 'info');
+            setTimeout(() => redirectBasedOnRole(userResult.user.role), 2000);
         }
     } catch (error) {
         console.error('Erreur lors de la vérification de l\'utilisateur:', error);
@@ -121,27 +110,33 @@ async function handleLogin(e) {
     try {
         console.log('Tentative de connexion pour:', email);
         
-        // CORRECTION : Vérifier que supabase est disponible
-        if (typeof window.supabase === 'undefined') {
+        // Vérifier que supabaseClient est disponible
+        if (typeof window.supabaseClient === 'undefined') {
             throw new Error('Service de connexion indisponible');
         }
         
-        // CORRECTION : Utiliser la méthode directe de supabase
-        const { data, error } = await window.supabase.auth.signInWithPassword({
-            email: email,
-            password: password
-        });
+        const result = await window.supabaseClient.login(email, password);
         
-        if (error) {
-            // Gérer les erreurs spécifiques
-            if (error.message.includes('Invalid login credentials')) {
-                showAlert('Email ou mot de passe incorrect', 'error');
-            } else if (error.message.includes('Email not confirmed')) {
-                showAlert('Veuillez confirmer votre email avant de vous connecter', 'error');
+        if (result.success) {
+            // Gérer "Se souvenir de moi"
+            if (rememberCheckbox && rememberCheckbox.checked) {
+                localStorage.setItem('rememberedEmail', email);
             } else {
-                showAlert(error.message || 'Email ou mot de passe incorrect', 'error');
+                localStorage.removeItem('rememberedEmail');
             }
             
+            showAlert('Connexion réussie ! Redirection...', 'success');
+            
+            // Rediriger selon le rôle
+            setTimeout(() => {
+                if (result.data && result.data.user) {
+                    redirectBasedOnRole(result.data.user.role);
+                } else {
+                    redirectBasedOnRole('member');
+                }
+            }, 1500);
+        } else {
+            showAlert(result.message || 'Email ou mot de passe incorrect', 'error');
             if (loginBtn) {
                 loginBtn.disabled = false;
                 loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
@@ -155,78 +150,7 @@ async function handleLogin(e) {
                     loginContainer.classList.remove('shake');
                 }, 500);
             }
-            return;
         }
-        
-        if (!data.user) {
-            throw new Error('Erreur de connexion');
-        }
-        
-        // Récupérer les infos utilisateur
-        const { data: userData, error: userError } = await window.supabase
-            .from('users')
-            .select('*')
-            .eq('id', data.user.id)
-            .single();
-        
-        if (userError) {
-            console.error('Erreur récupération utilisateur:', userError);
-            throw new Error('Erreur lors de la récupération de votre profil');
-        }
-        
-        // Vérifier le statut
-        if (userData.role === 'pending') {
-            await window.supabase.auth.signOut();
-            showAlert('Votre compte est en attente de validation par un administrateur', 'info');
-            if (loginBtn) {
-                loginBtn.disabled = false;
-                loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
-            }
-            return;
-        }
-        
-        if (userData.status === 'inactive') {
-            await window.supabase.auth.signOut();
-            showAlert('Votre compte a été désactivé. Contactez un administrateur.', 'error');
-            if (loginBtn) {
-                loginBtn.disabled = false;
-                loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
-            }
-            return;
-        }
-        
-        // Mettre à jour la dernière connexion
-        await window.supabase
-            .from('users')
-            .update({ last_login: new Date().toISOString() })
-            .eq('id', data.user.id);
-        
-        // Gérer "Se souvenir de moi"
-        if (rememberCheckbox && rememberCheckbox.checked) {
-            localStorage.setItem('rememberedEmail', email);
-        } else {
-            localStorage.removeItem('rememberedEmail');
-        }
-        
-        // Sauvegarder les infos pour la synchro entre onglets
-        try {
-            localStorage.setItem('user_display', JSON.stringify({
-                photo: userData.photo || 'images/default-avatar.png',
-                name: `${userData.prenom || ''} ${userData.nom || ''}`.trim() || 'Utilisateur',
-                role: userData.role,
-                dashboard: userData.role === 'admin' || userData.role === 'super_admin' ? 'admin' : 'member'
-            }));
-        } catch (e) {
-            console.warn('Impossible de sauvegarder user_display');
-        }
-        
-        showAlert('Connexion réussie ! Redirection...', 'success');
-        
-        // CORRECTION : Utiliser la fonction corrigée
-        setTimeout(() => {
-            redirectBasedOnRole(userData.role);
-        }, 1500);
-        
     } catch (error) {
         console.error('Erreur détaillée:', error);
         showAlert('Une erreur est survenue. Veuillez réessayer.', 'error');
@@ -284,12 +208,10 @@ async function handleForgotPassword(e) {
 }
 
 /**
- * Redirige l'utilisateur selon son rôle - VERSION CORRIGÉE
+ * Redirige l'utilisateur selon son rôle
  */
 function redirectBasedOnRole(role) {
-    console.log('Redirection pour rôle:', role);
-    
-    if (role === 'admin' || role === 'super_admin') {
+    if (role === 'admin') {
         window.location.href = 'admin/dashboard.html';
     } else if (role === 'member') {
         window.location.href = 'member/dashboard.html';
@@ -343,21 +265,6 @@ function addShakeAnimation() {
         }
         .shake {
             animation: shake 0.5s ease-in-out;
-        }
-        
-        .loading-spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,.3);
-            border-radius: 50%;
-            border-top-color: #fff;
-            animation: spin 1s ease-in-out infinite;
-            margin-right: 8px;
-        }
-        
-        @keyframes spin {
-            to { transform: rotate(360deg); }
         }
     `;
     document.head.appendChild(style);
