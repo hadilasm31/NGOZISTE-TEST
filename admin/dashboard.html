@@ -11,51 +11,16 @@
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../supabase-config.js"></script>
     
-    <script>
-    // Enregistrer le service worker
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(registration => {
-                    console.log('ServiceWorker enregistré:', registration.scope);
-                })
-                .catch(error => {
-                    console.log('Erreur ServiceWorker:', error);
-                });
-        });
-    }
-
-    // Détection de la connexion
-    function checkConnection() {
-        if (!navigator.onLine) {
-            window.location.href = 'offline.html';
-        }
-    }
-
-    // Vérifier au chargement
-    window.addEventListener('load', checkConnection);
-
-    // Vérifier quand la connexion change
-    window.addEventListener('offline', () => {
-        window.location.href = 'offline.html';
-    });
-
-    window.addEventListener('online', () => {
-        console.log('Connexion rétablie');
-    });
-
-    // Vérification périodique
-    setInterval(checkConnection, 30000); // Toutes les 30 secondes
-</script>
-
-
     <!-- Vérification d'authentification -->
     <script>
         (async function() {
             try {
+                console.log('🔍 Vérification authentification admin...');
+                
                 const { data: { session } } = await window.supabase.auth.getSession();
                 
                 if (!session) {
+                    console.log('❌ Pas de session, redirection vers login');
                     window.location.href = '../login.html';
                     return;
                 }
@@ -67,20 +32,34 @@
                     .single();
                 
                 if (error || !userData) {
+                    console.error('❌ Erreur récupération utilisateur:', error);
                     window.location.href = '../login.html';
                     return;
                 }
                 
                 if (userData.role !== 'admin' && userData.role !== 'super_admin') {
-                    window.location.href = '../member/dashboard.html';
+                    console.log('❌ Rôle incorrect:', userData.role);
+                    if (userData.role === 'member') {
+                        window.location.href = '../member/dashboard.html';
+                    } else {
+                        await window.supabase.auth.signOut();
+                        window.location.href = '../index.html';
+                    }
+                    return;
+                }
+                
+                if (userData.status !== 'active') {
+                    console.log('❌ Compte inactif');
+                    await window.supabase.auth.signOut();
+                    window.location.href = '../login.html';
                     return;
                 }
                 
                 window.currentUser = userData;
-                console.log('✅ Admin authentifié:', userData.prenom);
+                console.log('✅ Admin authentifié:', userData.prenom, 'Rôle:', userData.role);
                 
             } catch (error) {
-                console.error('Erreur auth:', error);
+                console.error('❌ Erreur auth:', error);
                 window.location.href = '../login.html';
             }
         })();
@@ -129,13 +108,13 @@
             height: 100vh;
             overflow-y: auto;
             z-index: 100;
+            transition: transform 0.3s ease;
         }
 
         .sidebar-header {
             padding: 30px 20px;
             text-align: center;
             border-bottom: 1px solid #eee;
-            position: relative;
         }
 
         .sidebar-header img {
@@ -654,10 +633,16 @@
             color: white;
         }
 
+        .btn-icon.permissions {
+            background: #9c27b0;
+            color: white;
+        }
+
         /* Member Actions */
         .member-actions {
             display: flex;
             gap: 5px;
+            flex-wrap: wrap;
         }
 
         /* Search Box */
@@ -1108,12 +1093,64 @@
             color: var(--danger-color);
         }
 
+        /* Lightbox */
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox-content {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .close-lightbox {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .close-lightbox:hover {
+            color: var(--danger-color);
+        }
+
+        /* Toast */
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            z-index: 3000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+
         /* Responsive */
         @media screen and (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
-                transition: transform 0.3s ease;
-                z-index: 1000;
             }
             
             .sidebar.active {
@@ -1980,6 +2017,12 @@
         </div>
     </div>
 
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox">
+        <span class="close-lightbox" onclick="closeLightbox()">&times;</span>
+        <img class="lightbox-content" id="lightbox-img" src="" alt="Agrandissement">
+    </div>
+
     <script>
         // ==================== VARIABLES GLOBALES ====================
         let currentUser = window.currentUser || null;
@@ -2003,53 +2046,24 @@
             console.log('Page admin chargée, initialisation...');
             
             if (!window.currentUser) {
-                await checkAuth();
-            } else {
-                currentUser = window.currentUser;
-                await updateUI();
-                await loadDashboardData();
-                await loadAllData();
+                console.log('En attente de currentUser...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                if (!window.currentUser) {
+                    console.error('currentUser toujours non défini');
+                    window.location.href = '../login.html';
+                    return;
+                }
             }
             
+            currentUser = window.currentUser;
+            await updateUI();
+            await loadDashboardData();
+            await loadAllData();
+            
             setupEventListeners();
+            initLightbox();
         });
-
-        // ==================== VÉRIFICATION AUTHENTIFICATION ====================
-        async function checkAuth() {
-            try {
-                const { data: { session }, error } = await window.supabase.auth.getSession();
-                
-                if (error || !session) {
-                    window.location.href = '../login.html';
-                    return;
-                }
-                
-                const { data: userData, error: userError } = await window.supabase
-                    .from('users')
-                    .select('*')
-                    .eq('id', session.user.id)
-                    .single();
-                
-                if (userError || !userData) {
-                    window.location.href = '../login.html';
-                    return;
-                }
-                
-                if (userData.role !== 'admin' && userData.role !== 'super_admin') {
-                    window.location.href = '../member/dashboard.html';
-                    return;
-                }
-                
-                currentUser = userData;
-                window.currentUser = userData;
-                
-                await updateUI();
-                
-            } catch (error) {
-                console.error('Erreur auth:', error);
-                window.location.href = '../login.html';
-            }
-        }
 
         // ==================== MISE À JOUR DE L'INTERFACE ====================
         async function updateUI() {
@@ -2073,6 +2087,8 @@
 
         // ==================== CHARGEMENT DES NOTIFICATIONS ====================
         async function loadNotifications() {
+            if (!currentUser) return;
+            
             try {
                 const { data, error } = await window.supabase
                     .from('notifications')
@@ -2090,48 +2106,47 @@
 
         // ==================== CHARGEMENT DU DASHBOARD ====================
         async function loadDashboardData() {
+            if (!currentUser) return;
+            
             try {
                 // Statistiques
-                const { data: stats } = await window.supabase
-                    .from('statistics')
-                    .select('*')
-                    .eq('id', 1)
-                    .single();
+                const membersCount = await window.supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'member');
+                const pendingCount = await window.supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'pending');
+                const eventsCount = await window.supabase.from('events').select('*', { count: 'exact', head: true });
+                const upcomingCount = await window.supabase.from('events').select('*', { count: 'exact', head: true }).gt('date', new Date().toISOString());
+                const activitiesCount = await window.supabase.from('activities').select('*', { count: 'exact', head: true });
                 
                 const statsContainer = document.getElementById('dashboard-stats');
-                
-                if (stats) {
-                    statsContainer.innerHTML = `
-                        <div class="stat-card">
-                            <div class="stat-card-icon"><i class="fas fa-users"></i></div>
-                            <div class="stat-card-content">
-                                <h3>${stats.members_count || 0}</h3>
-                                <p>Membres</p>
-                            </div>
+                statsContainer.innerHTML = `
+                    <div class="stat-card">
+                        <div class="stat-card-icon"><i class="fas fa-users"></i></div>
+                        <div class="stat-card-content">
+                            <h3>${membersCount.count || 0}</h3>
+                            <p>Membres</p>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-card-icon"><i class="fas fa-user-clock"></i></div>
-                            <div class="stat-card-content">
-                                <h3>${stats.pending_members || 0}</h3>
-                                <p>En attente</p>
-                            </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon"><i class="fas fa-user-clock"></i></div>
+                        <div class="stat-card-content">
+                            <h3>${pendingCount.count || 0}</h3>
+                            <p>En attente</p>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-card-icon"><i class="fas fa-calendar-alt"></i></div>
-                            <div class="stat-card-content">
-                                <h3>${stats.upcoming_events || 0}</h3>
-                                <p>Événements à venir</p>
-                            </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon"><i class="fas fa-calendar-alt"></i></div>
+                        <div class="stat-card-content">
+                            <h3>${upcomingCount.count || 0}</h3>
+                            <p>Événements à venir</p>
                         </div>
-                        <div class="stat-card">
-                            <div class="stat-card-icon"><i class="fas fa-running"></i></div>
-                            <div class="stat-card-content">
-                                <h3>${stats.activities_count || 0}</h3>
-                                <p>Activités</p>
-                            </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-card-icon"><i class="fas fa-running"></i></div>
+                        <div class="stat-card-content">
+                            <h3>${activitiesCount.count || 0}</h3>
+                            <p>Activités</p>
                         </div>
-                    `;
-                }
+                    </div>
+                `;
 
                 // Membres en attente
                 const { data: pending } = await window.supabase
@@ -2166,6 +2181,7 @@
                     .from('events')
                     .select('*')
                     .gt('date', new Date().toISOString())
+                    .eq('status', 'published')
                     .order('date', { ascending: true })
                     .limit(5);
                 
@@ -2207,7 +2223,7 @@
                             <span class="activity-log-time">${new Date(log.created_at).toLocaleString()}</span>
                             <span class="activity-log-user">${log.users?.prenom || ''} ${log.users?.nom || ''}</span>
                             <span>${log.action}</span>
-                            ${log.details ? `<small> - ${log.details.message}</small>` : ''}
+                            ${log.details ? `<small> - ${log.details.message || JSON.stringify(log.details)}</small>` : ''}
                         </div>
                     `).join('');
                 } else {
@@ -2236,10 +2252,16 @@
 
         // ==================== GESTION DES UTILISATEURS ====================
         async function loadUsers(filter = 'all') {
+            if (!currentUser) return;
+            
             const usersTable = document.getElementById('users-table');
             
             try {
                 let query = window.supabase.from('users').select('*');
+                
+                if (currentUser.role === 'admin') {
+                    query = query.neq('role', 'super_admin');
+                }
                 
                 if (filter !== 'all') {
                     query = query.eq('role', filter);
@@ -2254,6 +2276,11 @@
                 if (usersData.length > 0) {
                     usersTable.innerHTML = usersData.map(u => {
                         const photo = u.photo || '../images/default-avatar.png';
+                        const canEdit = currentUser.role === 'super_admin' || 
+                                      (currentUser.role === 'admin' && u.role !== 'super_admin' && u.role !== 'admin');
+                        const canDelete = currentUser.role === 'super_admin' || 
+                                        (currentUser.role === 'admin' && u.role !== 'super_admin' && u.role !== 'admin');
+                        
                         return `
                             <tr>
                                 <td><img src="${photo}" style="width:40px;height:40px;border-radius:50%;object-fit:cover;" onerror="this.src='../images/default-avatar.png'"></td>
@@ -2263,12 +2290,14 @@
                                 <td><span class="status-badge ${u.status || 'pending'}">${getStatusLabel(u.status)}</span></td>
                                 <td class="member-actions">
                                     <button class="btn-icon view" onclick="viewUser('${u.id}')" title="Voir"><i class="fas fa-eye"></i></button>
-                                    ${u.role !== 'super_admin' || currentUser?.role === 'super_admin' ? `
+                                    ${canEdit ? `
                                         <button class="btn-icon edit" onclick="editUser('${u.id}')" title="Modifier"><i class="fas fa-edit"></i></button>
+                                    ` : ''}
+                                    ${canDelete ? `
                                         <button class="btn-icon delete" onclick="confirmDeleteUser('${u.id}')" title="Supprimer"><i class="fas fa-trash"></i></button>
                                     ` : ''}
-                                    ${currentUser?.role === 'super_admin' && u.role !== 'super_admin' ? `
-                                        <button class="btn-icon approve" onclick="showPermissionsModal('${u.id}')" title="Permissions"><i class="fas fa-shield-alt"></i></button>
+                                    ${currentUser.role === 'super_admin' && u.role !== 'super_admin' ? `
+                                        <button class="btn-icon permissions" onclick="showPermissionsModal('${u.id}')" title="Permissions"><i class="fas fa-shield-alt"></i></button>
                                     ` : ''}
                                 </td>
                             </tr>
@@ -2283,8 +2312,54 @@
             }
         }
 
+        // ==================== APPROBATION MEMBRE ====================
+        window.approveMember = async function(userId) {
+            try {
+                const { error } = await window.supabase
+                    .from('users')
+                    .update({ 
+                        role: 'member', 
+                        status: 'active',
+                        updated_at: new Date().toISOString()
+                    })
+                    .eq('id', userId);
+                
+                if (error) throw error;
+                
+                window.showToast('Membre approuvé avec succès', 'success');
+                await loadUsers('pending');
+                await loadDashboardData();
+                
+            } catch (error) {
+                console.error('Erreur:', error);
+                window.showToast('Erreur: ' + error.message, 'error');
+            }
+        };
+
+        // ==================== REJET MEMBRE ====================
+        window.rejectMember = async function(userId) {
+            if (!confirm('Rejeter cette demande d\'adhésion ?')) return;
+            
+            try {
+                const { error } = await window.supabase
+                    .from('users')
+                    .delete()
+                    .eq('id', userId);
+                
+                if (error) throw error;
+                
+                window.showToast('Demande rejetée', 'success');
+                await loadUsers('pending');
+                await loadDashboardData();
+                
+            } catch (error) {
+                console.error('Erreur:', error);
+                window.showToast('Erreur: ' + error.message, 'error');
+            }
+        };
+
         // ==================== AFFICHAGE DÉTAILS UTILISATEUR ====================
-        async function viewUser(userId) {
+        window.viewUser = async function(userId) {
             const user = usersData.find(u => u.id === userId);
             if (!user) return;
             
@@ -2308,7 +2383,6 @@
                 <p><strong>Motivation:</strong> ${user.motivation || '-'}</p>
             `;
             
-            // Permissions
             const permissionsDiv = document.getElementById('user-permissions');
             if (user.permissions) {
                 permissionsDiv.innerHTML = Object.entries(user.permissions).map(([resource, perms]) => `
@@ -2329,61 +2403,15 @@
             
             currentItemId = userId;
             openModal('userModal');
-        }
-
-        // ==================== APPROBATION MEMBRE ====================
-        async function approveMember(userId) {
-            try {
-                const { error } = await window.supabase
-                    .from('users')
-                    .update({ 
-                        role: 'member', 
-                        status: 'active',
-                        updated_at: new Date().toISOString()
-                    })
-                    .eq('id', userId);
-                
-                if (error) throw error;
-                
-                window.showToast('Membre approuvé avec succès', 'success');
-                await loadUsers('pending');
-                await loadDashboardData();
-                
-            } catch (error) {
-                console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
-            }
-        }
-
-        // ==================== REJET MEMBRE ====================
-        async function rejectMember(userId) {
-            if (!confirm('Rejeter cette demande d\'adhésion ?')) return;
-            
-            try {
-                const { error } = await window.supabase
-                    .from('users')
-                    .delete()
-                    .eq('id', userId);
-                
-                if (error) throw error;
-                
-                window.showToast('Demande rejetée', 'success');
-                await loadUsers('pending');
-                await loadDashboardData();
-                
-            } catch (error) {
-                console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
-            }
-        }
+        };
 
         // ==================== SUPPRESSION UTILISATEUR ====================
-        function confirmDeleteUser(userId) {
+        window.confirmDeleteUser = function(userId) {
             currentItemId = userId;
             currentAction = 'deleteUser';
             document.getElementById('confirm-message').textContent = 'Êtes-vous sûr de vouloir supprimer cet utilisateur ? Cette action est irréversible.';
             openModal('confirmModal');
-        }
+        };
 
         async function deleteUser() {
             try {
@@ -2407,7 +2435,7 @@
         }
 
         // ==================== GESTION DES PERMISSIONS ====================
-        function showPermissionsModal(userId) {
+        window.showPermissionsModal = function(userId) {
             const user = usersData.find(u => u.id === userId);
             if (!user) return;
             
@@ -2442,9 +2470,9 @@
             `).join('');
             
             openModal('permissionsModal');
-        }
+        };
 
-        async function savePermissions() {
+        window.savePermissions = async function() {
             const userId = document.getElementById('permissions-user-id').value;
             const permissions = {};
             
@@ -2472,7 +2500,7 @@
                 console.error('Erreur:', error);
                 window.showToast('Erreur: ' + error.message, 'error');
             }
-        }
+        };
 
         // ==================== GESTION DES ÉVÉNEMENTS ====================
         async function loadEvents(filter = 'upcoming') {
@@ -2520,19 +2548,19 @@
             }
         }
 
-        function showCreateEventModal() {
+        window.showCreateEventModal = function() {
             document.getElementById('event-form-title').textContent = 'Créer un événement';
             document.getElementById('event-id').value = '';
             document.getElementById('event-form').reset();
             document.getElementById('event-image-preview').classList.remove('visible');
             document.getElementById('event-form-container').style.display = 'block';
-        }
+        };
 
-        function hideEventForm() {
+        window.hideEventForm = function() {
             document.getElementById('event-form-container').style.display = 'none';
-        }
+        };
 
-        function editEvent(eventId) {
+        window.editEvent = function(eventId) {
             const event = eventsData.find(e => e.id === eventId);
             if (!event) return;
             
@@ -2553,9 +2581,9 @@
             }
             
             document.getElementById('event-form-container').style.display = 'block';
-        }
+        };
 
-        async function saveEvent(e) {
+        window.saveEvent = async function(e) {
             e.preventDefault();
             
             const eventId = document.getElementById('event-id').value;
@@ -2599,14 +2627,14 @@
                 console.error('Erreur:', error);
                 window.showToast('Erreur: ' + error.message, 'error');
             }
-        }
+        };
 
-        function confirmDeleteEvent(eventId) {
+        window.confirmDeleteEvent = function(eventId) {
             currentItemId = eventId;
             currentAction = 'deleteEvent';
             document.getElementById('confirm-message').textContent = 'Êtes-vous sûr de vouloir supprimer cet événement ?';
             openModal('confirmModal');
-        }
+        };
 
         async function deleteEvent() {
             try {
@@ -2628,13 +2656,13 @@
             }
         }
 
-        function viewEvent(eventId) {
+        window.viewEvent = function(eventId) {
             const event = eventsData.find(e => e.id === eventId);
             if (!event) return;
             
             const date = new Date(event.date);
             window.showToast(`Événement: ${event.title}\n\nDate: ${date.toLocaleString()}\nLieu: ${event.location}\nParticipants: ${event.current_participants || 0}/${event.max_participants || '∞'}\nDescription: ${event.description}`, 'info');
-        }
+        };
 
         // ==================== GESTION DES ACTIVITÉS ====================
         async function loadActivities() {
@@ -2676,19 +2704,19 @@
             }
         }
 
-        function showCreateActivityModal() {
+        window.showCreateActivityModal = function() {
             document.getElementById('activity-form-title').textContent = 'Créer une activité';
             document.getElementById('activity-id').value = '';
             document.getElementById('activity-form').reset();
             document.getElementById('activity-image-preview').classList.remove('visible');
             document.getElementById('activity-form-container').style.display = 'block';
-        }
+        };
 
-        function hideActivityForm() {
+        window.hideActivityForm = function() {
             document.getElementById('activity-form-container').style.display = 'none';
-        }
+        };
 
-        function editActivity(activityId) {
+        window.editActivity = function(activityId) {
             const activity = activitiesData.find(a => a.id === activityId);
             if (!activity) return;
             
@@ -2707,9 +2735,9 @@
             }
             
             document.getElementById('activity-form-container').style.display = 'block';
-        }
+        };
 
-        async function saveActivity(e) {
+        window.saveActivity = async function(e) {
             e.preventDefault();
             
             const activityId = document.getElementById('activity-id').value;
@@ -2750,14 +2778,14 @@
                 console.error('Erreur:', error);
                 window.showToast('Erreur: ' + error.message, 'error');
             }
-        }
+        };
 
-        function confirmDeleteActivity(activityId) {
+        window.confirmDeleteActivity = function(activityId) {
             currentItemId = activityId;
             currentAction = 'deleteActivity';
             document.getElementById('confirm-message').textContent = 'Êtes-vous sûr de vouloir supprimer cette activité ?';
             openModal('confirmModal');
-        }
+        };
 
         async function deleteActivity() {
             try {
@@ -2778,13 +2806,13 @@
             }
         }
 
-        function viewActivity(activityId) {
+        window.viewActivity = function(activityId) {
             const activity = activitiesData.find(a => a.id === activityId);
             if (!activity) return;
             
             const date = activity.date ? new Date(activity.date) : new Date();
             window.showToast(`Activité: ${activity.title}\n\nDate: ${date.toLocaleDateString()}\nLieu: ${activity.location}\nCatégorie: ${window.getCategoryLabel(activity.category)}\nDescription: ${activity.description}`, 'info');
-        }
+        };
 
         // ==================== GESTION DE L'ÉQUIPE ====================
         async function loadTeam() {
@@ -2826,19 +2854,19 @@
             }
         }
 
-        function showCreateTeamModal() {
+        window.showCreateTeamModal = function() {
             document.getElementById('team-form-title').textContent = 'Ajouter un membre';
             document.getElementById('team-id').value = '';
             document.getElementById('team-form').reset();
             document.getElementById('team-photo-preview').classList.remove('visible');
             document.getElementById('team-form-container').style.display = 'block';
-        }
+        };
 
-        function hideTeamForm() {
+        window.hideTeamForm = function() {
             document.getElementById('team-form-container').style.display = 'none';
-        }
+        };
 
-        function editTeamMember(memberId) {
+        window.editTeamMember = function(memberId) {
             const member = teamData.find(m => m.id === memberId);
             if (!member) return;
             
@@ -2861,9 +2889,9 @@
             }
             
             document.getElementById('team-form-container').style.display = 'block';
-        }
+        };
 
-        async function saveTeamMember(e) {
+        window.saveTeamMember = async function(e) {
             e.preventDefault();
             
             const memberId = document.getElementById('team-id').value;
@@ -2907,14 +2935,14 @@
                 console.error('Erreur:', error);
                 window.showToast('Erreur: ' + error.message, 'error');
             }
-        }
+        };
 
-        function confirmDeleteTeamMember(memberId) {
+        window.confirmDeleteTeamMember = function(memberId) {
             currentItemId = memberId;
             currentAction = 'deleteTeamMember';
             document.getElementById('confirm-message').textContent = 'Êtes-vous sûr de vouloir supprimer ce membre ?';
             openModal('confirmModal');
-        }
+        };
 
         async function deleteTeamMember() {
             try {
@@ -2935,12 +2963,12 @@
             }
         }
 
-        function viewTeamMember(memberId) {
+        window.viewTeamMember = function(memberId) {
             const member = teamData.find(m => m.id === memberId);
             if (!member) return;
             
             window.showToast(`${member.prenom || ''} ${member.nom || ''}\nRôle: ${member.role}\nBio: ${member.bio || 'Aucune biographie'}`, 'info');
-        }
+        };
 
         // ==================== GESTION DES ANNONCES ====================
         async function loadAnnouncements() {
@@ -2982,18 +3010,18 @@
             }
         }
 
-        function showCreateAnnouncementModal() {
+        window.showCreateAnnouncementModal = function() {
             document.getElementById('announcement-form-title').textContent = 'Créer une annonce';
             document.getElementById('announcement-id').value = '';
             document.getElementById('announcement-form').reset();
             document.getElementById('announcement-form-container').style.display = 'block';
-        }
+        };
 
-        function hideAnnouncementForm() {
+        window.hideAnnouncementForm = function() {
             document.getElementById('announcement-form-container').style.display = 'none';
-        }
+        };
 
-        function editAnnouncement(announcementId) {
+        window.editAnnouncement = function(announcementId) {
             const announcement = announcementsData.find(a => a.id === announcementId);
             if (!announcement) return;
             
@@ -3005,9 +3033,9 @@
             document.getElementById('announcement-visibility').value = announcement.visibility || 'public';
             
             document.getElementById('announcement-form-container').style.display = 'block';
-        }
+        };
 
-        async function saveAnnouncement(e) {
+        window.saveAnnouncement = async function(e) {
             e.preventDefault();
             
             const announcementId = document.getElementById('announcement-id').value;
@@ -3047,14 +3075,14 @@
                 console.error('Erreur:', error);
                 window.showToast('Erreur: ' + error.message, 'error');
             }
-        }
+        };
 
-        function confirmDeleteAnnouncement(announcementId) {
+        window.confirmDeleteAnnouncement = function(announcementId) {
             currentItemId = announcementId;
             currentAction = 'deleteAnnouncement';
             document.getElementById('confirm-message').textContent = 'Êtes-vous sûr de vouloir supprimer cette annonce ?';
             openModal('confirmModal');
-        }
+        };
 
         async function deleteAnnouncement() {
             try {
@@ -3102,7 +3130,7 @@
                             <div class="announcement-date">
                                 ${new Date(r.created_at).toLocaleDateString()} - Activité: ${r.activities?.title || 'Non associée'}
                             </div>
-                            <p>${r.content ? window.truncateText(r.content, 200) : ''}...</p>
+                            <p>${window.truncateText(r.content || '', 200)}...</p>
                             ${r.images?.length ? `<p><strong>Images:</strong> ${r.images.length}</p>` : ''}
                             <div class="member-actions">
                                 <button class="btn-icon view" onclick="viewReport('${r.id}')"><i class="fas fa-eye"></i></button>
@@ -3120,16 +3148,15 @@
             }
         }
 
-        function showCreateReportModal() {
+        window.showCreateReportModal = function() {
             document.getElementById('report-form-title').textContent = 'Créer un compte rendu';
             document.getElementById('report-id').value = '';
             document.getElementById('report-form').reset();
             document.getElementById('report-images-preview').innerHTML = '';
             document.getElementById('report-form-container').style.display = 'block';
             
-            // Charger les événements pour le select
             loadEventsForSelect();
-        }
+        };
 
         async function loadEventsForSelect() {
             try {
@@ -3148,11 +3175,11 @@
             }
         }
 
-        function hideReportForm() {
+        window.hideReportForm = function() {
             document.getElementById('report-form-container').style.display = 'none';
-        }
+        };
 
-        function editReport(reportId) {
+        window.editReport = function(reportId) {
             const report = reportsData.find(r => r.id === reportId);
             if (!report) return;
             
@@ -3162,7 +3189,6 @@
             document.getElementById('report-content').value = report.content || '';
             document.getElementById('report-date').value = report.date ? report.date.slice(0, 10) : '';
             
-            // Charger les événements et sélectionner
             loadEventsForSelect().then(() => {
                 if (report.activity_id) {
                     document.getElementById('report-event').value = report.activity_id;
@@ -3177,9 +3203,9 @@
             }
             
             document.getElementById('report-form-container').style.display = 'block';
-        }
+        };
 
-        async function saveReport(e) {
+        window.saveReport = async function(e) {
             e.preventDefault();
             
             const reportId = document.getElementById('report-id').value;
@@ -3219,14 +3245,14 @@
                 console.error('Erreur:', error);
                 window.showToast('Erreur: ' + error.message, 'error');
             }
-        }
+        };
 
-        function confirmDeleteReport(reportId) {
+        window.confirmDeleteReport = function(reportId) {
             currentItemId = reportId;
             currentAction = 'deleteReport';
             document.getElementById('confirm-message').textContent = 'Êtes-vous sûr de vouloir supprimer ce compte rendu ?';
             openModal('confirmModal');
-        }
+        };
 
         async function deleteReport() {
             try {
@@ -3247,12 +3273,12 @@
             }
         }
 
-        function viewReport(reportId) {
+        window.viewReport = function(reportId) {
             const report = reportsData.find(r => r.id === reportId);
             if (!report) return;
             
             window.showToast(`${report.title}\n\n${report.content}`, 'info', 5000);
-        }
+        };
 
         // ==================== GESTION DE LA GALERIE ====================
         async function loadGallery() {
@@ -3292,27 +3318,27 @@
             }
         }
 
-        function showCreateGalleryModal() {
+        window.showCreateGalleryModal = function() {
             document.getElementById('gallery-form-title').textContent = 'Ajouter des images';
             document.getElementById('gallery-form').reset();
             document.getElementById('gallery-images-preview').innerHTML = '';
             document.getElementById('gallery-form-container').style.display = 'block';
-        }
+        };
 
-        function hideGalleryForm() {
+        window.hideGalleryForm = function() {
             document.getElementById('gallery-form-container').style.display = 'none';
-        }
+        };
 
-        function editGalleryItem(itemId) {
+        window.editGalleryItem = function(itemId) {
             window.showToast('Édition d\'image en développement', 'info');
-        }
+        };
 
-        function confirmDeleteGalleryItem(itemId) {
+        window.confirmDeleteGalleryItem = function(itemId) {
             currentItemId = itemId;
             currentAction = 'deleteGalleryItem';
             document.getElementById('confirm-message').textContent = 'Êtes-vous sûr de vouloir supprimer cette image ?';
             openModal('confirmModal');
-        }
+        };
 
         async function deleteGalleryItem() {
             try {
@@ -3333,12 +3359,11 @@
             }
         }
 
-        async function saveGalleryItems(e) {
+        window.saveGalleryItems = async function(e) {
             e.preventDefault();
-            
             window.showToast('Ajout d\'images en développement', 'info');
             hideGalleryForm();
-        }
+        };
 
         // ==================== GESTION DU CONTENU ====================
         async function loadContent() {
@@ -3490,7 +3515,7 @@
                             <span class="activity-log-time">${new Date(log.created_at).toLocaleString()}</span>
                             <span class="activity-log-user">${log.users?.prenom || ''} ${log.users?.nom || ''}</span>
                             <span>${log.action}</span>
-                            ${log.details ? `<small> - ${log.details.message}</small>` : ''}
+                            ${log.details ? `<small> - ${log.details.message || JSON.stringify(log.details)}</small>` : ''}
                         </div>
                     `).join('');
                 } else {
@@ -3503,7 +3528,7 @@
         }
 
         // ==================== FONCTIONS UTILITAIRES ====================
-        function showPanel(panel) {
+        window.showPanel = function(panel) {
             document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
             document.getElementById(panel + '-panel').classList.add('active');
             
@@ -3513,11 +3538,11 @@
             }
             
             document.getElementById('page-title').textContent = panel.charAt(0).toUpperCase() + panel.slice(1);
-        }
+        };
 
-        function toggleUserMenu() {
+        window.toggleUserMenu = function() {
             document.getElementById('user-dropdown').classList.toggle('show');
-        }
+        };
 
         window.onclick = function(event) {
             if (!event.target.matches('.user-menu') && !event.target.matches('.user-menu *')) {
@@ -3526,7 +3551,7 @@
                     dropdown.classList.remove('show');
                 }
             }
-        }
+        };
 
         function openModal(modalId) {
             document.getElementById(modalId).classList.add('active');
@@ -3536,21 +3561,21 @@
             document.getElementById(modalId).classList.remove('active');
         }
 
-        function filterUsers(filter) {
+        window.filterUsers = function(filter) {
             document.querySelectorAll('#users-panel .admin-tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             currentFilter = filter;
             loadUsers(filter);
-        }
+        };
 
-        function filterEvents(filter) {
+        window.filterEvents = function(filter) {
             document.querySelectorAll('#events-panel .admin-tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             currentFilter = filter;
             loadEvents(filter);
-        }
+        };
 
-        function searchUsers() {
+        window.searchUsers = function() {
             const search = document.getElementById('user-search').value.toLowerCase();
             const filtered = usersData.filter(u => 
                 (u.nom || '').toLowerCase().includes(search) ||
@@ -3578,9 +3603,9 @@
             } else {
                 usersTable.innerHTML = '<tr><td colspan="6" class="no-data">Aucun résultat</td></tr>';
             }
-        }
+        };
 
-        function previewImage(input, previewId) {
+        window.previewImage = function(input, previewId) {
             const preview = document.getElementById(previewId);
             
             if (input.files && input.files[0]) {
@@ -3594,9 +3619,9 @@
                 preview.src = '';
                 preview.classList.remove('visible');
             }
-        }
+        };
 
-        function previewMultipleImages(input, containerId) {
+        window.previewMultipleImages = function(input, containerId) {
             const container = document.getElementById(containerId);
             container.innerHTML = '';
             
@@ -3615,7 +3640,7 @@
                     reader.readAsDataURL(file);
                 });
             }
-        }
+        };
 
         function getRoleLabel(role) {
             const labels = {
@@ -3636,18 +3661,18 @@
             return labels[status] || status;
         }
 
-        function viewProfile() {
+        window.viewProfile = function() {
             showPanel('users');
             viewUser(currentUser.id);
-        }
+        };
 
-        function editProfile() {
+        window.editProfile = function() {
             window.showToast('Fonctionnalité d\'édition de profil en développement', 'info');
-        }
+        };
 
-        function showNotifications() {
+        window.showNotifications = function() {
             window.showToast('Fonctionnalité de notifications en développement', 'info');
-        }
+        };
 
         function showContentTab(tab) {
             document.querySelectorAll('#content-panel .content-editor').forEach(el => {
@@ -3829,11 +3854,88 @@
             }
         }
 
-        // Fonctions vides pour les actions non implémentées
-        function showCreateUserModal() { window.showToast('Création d\'utilisateur en développement', 'info'); }
-        function editUser(userId) { window.showToast('Édition d\'utilisateur en développement', 'info'); }
-        function editUserFromModal() { window.showToast('Édition d\'utilisateur en développement', 'info'); }
-        function deleteUserFromModal() { window.showToast('Suppression d\'utilisateur en développement', 'info'); }
+        // ==================== LIGHTBOX ====================
+        function initLightbox() {
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImg = document.getElementById('lightbox-img');
+            const closeLightbox = document.querySelector('.close-lightbox');
+
+            window.openLightbox = function(src) {
+                lightboxImg.src = src;
+                lightbox.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            };
+
+            closeLightbox.addEventListener('click', () => {
+                lightbox.classList.remove('active');
+                document.body.style.overflow = 'auto';
+            });
+
+            lightbox.addEventListener('click', (e) => {
+                if (e.target === lightbox) {
+                    lightbox.classList.remove('active');
+                    document.body.style.overflow = 'auto';
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && lightbox.classList.contains('active')) {
+                    lightbox.classList.remove('active');
+                    document.body.style.overflow = 'auto';
+                }
+            });
+        }
+
+        window.closeLightbox = function() {
+            const lightbox = document.getElementById('lightbox');
+            lightbox.classList.remove('active');
+            document.body.style.overflow = 'auto';
+        };
+
+        // ==================== TOAST ====================
+        window.showToast = function(message, type = 'info', duration = 3000) {
+            const oldToast = document.querySelector('.toast-notification');
+            if (oldToast) oldToast.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            document.body.appendChild(toast);
+            
+            const colors = {
+                success: '#4CAF50',
+                error: '#f44336',
+                warning: '#ff9800',
+                info: '#2196F3'
+            };
+            
+            toast.style.backgroundColor = colors[type] || colors.info;
+            toast.textContent = message;
+            
+            toast.offsetHeight;
+            toast.style.opacity = '1';
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        };
+
+        // ==================== DÉCONNEXION ====================
+        window.logout = async function() {
+            try {
+                await window.supabase.auth.signOut();
+                localStorage.removeItem('user_display');
+                localStorage.removeItem('rememberedEmail');
+                window.location.href = '../index.html';
+            } catch (error) {
+                console.error('Erreur déconnexion:', error);
+            }
+        };
+
+        // ==================== FONCTIONS MANQUANTES ====================
+        window.editUser = function(userId) { window.showToast('Édition d\'utilisateur en développement', 'info'); };
+        window.editUserFromModal = function() { window.showToast('Édition d\'utilisateur en développement', 'info'); };
+        window.deleteUserFromModal = function() { window.showToast('Suppression d\'utilisateur en développement', 'info'); };
     </script>
 </body>
 </html>
