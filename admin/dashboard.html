@@ -15,9 +15,21 @@
     <script>
         (async function() {
             try {
-                console.log('🔍 Vérification authentification admin...');
+                console.log('🔍 [ADMIN] Vérification authentification...');
                 
-                const { data: { session } } = await window.supabase.auth.getSession();
+                if (typeof window.supabase === 'undefined') {
+                    console.error('❌ Supabase non initialisé');
+                    setTimeout(() => window.location.href = '../login.html', 1000);
+                    return;
+                }
+
+                const { data: { session }, error } = await window.supabase.auth.getSession();
+                
+                if (error) {
+                    console.error('❌ Erreur session:', error);
+                    window.location.href = '../login.html';
+                    return;
+                }
                 
                 if (!session) {
                     console.log('❌ Pas de session, redirection vers login');
@@ -25,17 +37,27 @@
                     return;
                 }
                 
-                const { data: userData, error } = await window.supabase
+                console.log('✅ Session trouvée:', session.user.email);
+                
+                const { data: userData, error: userError } = await window.supabase
                     .from('users')
                     .select('*')
                     .eq('id', session.user.id)
                     .single();
                 
-                if (error || !userData) {
-                    console.error('❌ Erreur récupération utilisateur:', error);
+                if (userError) {
+                    console.error('❌ Erreur récupération utilisateur:', userError);
                     window.location.href = '../login.html';
                     return;
                 }
+                
+                if (!userData) {
+                    console.error('❌ Utilisateur non trouvé');
+                    window.location.href = '../login.html';
+                    return;
+                }
+                
+                console.log('✅ Utilisateur trouvé:', userData.email, 'Rôle:', userData.role);
                 
                 if (userData.role !== 'admin' && userData.role !== 'super_admin') {
                     console.log('❌ Rôle incorrect:', userData.role);
@@ -56,13 +78,60 @@
                 }
                 
                 window.currentUser = userData;
+                
+                try {
+                    localStorage.setItem('user_display', JSON.stringify({
+                        photo: userData.photo || '../images/default-avatar.png',
+                        name: `${userData.prenom || ''} ${userData.nom || ''}`.trim(),
+                        role: userData.role,
+                        dashboard: 'admin'
+                    }));
+                } catch (e) {
+                    console.warn('Impossible de sauvegarder user_display');
+                }
+                
                 console.log('✅ Admin authentifié:', userData.prenom, 'Rôle:', userData.role);
                 
+                if (document.readyState === 'loading') {
+                    document.addEventListener('DOMContentLoaded', () => updateAdminUI(userData));
+                } else {
+                    updateAdminUI(userData);
+                }
+                
             } catch (error) {
-                console.error('❌ Erreur auth:', error);
+                console.error('❌ Erreur critique auth:', error);
                 window.location.href = '../login.html';
             }
         })();
+
+        function updateAdminUI(user) {
+            console.log('🔄 Mise à jour interface admin');
+            
+            const adminName = document.getElementById('admin-name');
+            const topbarName = document.getElementById('topbar-name');
+            const adminRole = document.getElementById('admin-role');
+            const roleBadge = document.getElementById('user-role-badge');
+            const adminAvatar = document.getElementById('admin-avatar');
+            const topbarAvatar = document.getElementById('topbar-avatar');
+            
+            if (adminName) adminName.textContent = `${user.prenom || ''} ${user.nom || ''}`.trim() || 'Admin';
+            if (topbarName) topbarName.textContent = `${user.prenom || ''} ${user.nom || ''}`.trim() || 'Admin';
+            if (adminRole) adminRole.textContent = user.role === 'super_admin' ? 'Super Administrateur' : 'Administrateur';
+            
+            if (roleBadge) {
+                roleBadge.textContent = user.role === 'super_admin' ? 'Super Admin' : 'Admin';
+                roleBadge.className = `permissions-badge ${user.role}`;
+            }
+            
+            if (user.photo) {
+                if (adminAvatar) adminAvatar.src = user.photo;
+                if (topbarAvatar) topbarAvatar.src = user.photo;
+            }
+            
+            if (typeof loadDashboardData === 'function') loadDashboardData();
+            if (typeof loadAllData === 'function') loadAllData();
+            if (typeof loadNotifications === 'function') loadNotifications();
+        }
     </script>
     
     <style>
@@ -93,13 +162,11 @@
             background: #f5f5f5;
         }
 
-        /* Dashboard Layout */
         .dashboard {
             display: flex;
             min-height: 100vh;
         }
 
-        /* Sidebar */
         .sidebar {
             width: 280px;
             background: white;
@@ -235,14 +302,12 @@
             margin-right: 10px;
         }
 
-        /* Main Content */
         .main-content {
             flex: 1;
             margin-left: 280px;
             padding: 30px;
         }
 
-        /* Top Bar */
         .top-bar {
             background: white;
             padding: 15px 30px;
@@ -334,7 +399,6 @@
             color: var(--dark-color);
         }
 
-        /* Dropdown Menu */
         .dropdown-menu {
             position: absolute;
             top: 70px;
@@ -384,7 +448,6 @@
             margin: 8px 0;
         }
 
-        /* Admin Panels */
         .admin-panel {
             display: none;
         }
@@ -393,7 +456,6 @@
             display: block;
         }
 
-        /* Stats Cards */
         .stats-cards {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
@@ -439,7 +501,6 @@
             font-size: 0.9rem;
         }
 
-        /* Dashboard Sections */
         .dashboard-section {
             background: white;
             border-radius: var(--border-radius);
@@ -461,7 +522,6 @@
             color: var(--primary-color);
         }
 
-        /* Tables */
         .events-table {
             overflow-x: auto;
         }
@@ -488,7 +548,6 @@
             background: #f8f9fa;
         }
 
-        /* Status Badges */
         .status-badge {
             padding: 4px 12px;
             border-radius: 20px;
@@ -541,7 +600,6 @@
             color: #e65100;
         }
 
-        /* Action Buttons */
         .action-buttons {
             display: flex;
             gap: 10px;
@@ -638,14 +696,12 @@
             color: white;
         }
 
-        /* Member Actions */
         .member-actions {
             display: flex;
             gap: 5px;
             flex-wrap: wrap;
         }
 
-        /* Search Box */
         .search-box {
             display: flex;
             gap: 10px;
@@ -674,7 +730,6 @@
             cursor: pointer;
         }
 
-        /* Admin Tabs */
         .admin-tabs {
             display: flex;
             gap: 10px;
@@ -699,7 +754,6 @@
             color: white;
         }
 
-        /* Create Form */
         .create-form {
             background: white;
             border-radius: var(--border-radius);
@@ -754,7 +808,6 @@
             gap: 15px;
         }
 
-        /* Preview */
         .preview-container {
             margin-top: 10px;
             max-width: 300px;
@@ -772,7 +825,6 @@
             display: block;
         }
 
-        /* Permissions Grid */
         .permissions-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -813,7 +865,6 @@
             accent-color: var(--primary-color);
         }
 
-        /* Activity Log */
         .activity-log-item {
             padding: 12px;
             border-left: 3px solid var(--primary-color);
@@ -832,7 +883,6 @@
             color: var(--dark-color);
         }
 
-        /* Announcements List */
         .announcements-list {
             display: flex;
             flex-direction: column;
@@ -893,7 +943,6 @@
             margin-bottom: 10px;
         }
 
-        /* Gallery Grid */
         .gallery-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
@@ -946,7 +995,6 @@
             margin: 0 5px;
         }
 
-        /* Content Editor */
         .content-editor {
             background: white;
             border-radius: var(--border-radius);
@@ -1004,7 +1052,6 @@
             font-size: 1rem;
         }
 
-        /* Modal */
         .modal {
             display: none;
             position: fixed;
@@ -1056,7 +1103,6 @@
             color: var(--danger-color);
         }
 
-        /* États */
         .loading {
             text-align: center;
             padding: 40px;
@@ -1093,7 +1139,6 @@
             color: var(--danger-color);
         }
 
-        /* Lightbox */
         .lightbox {
             display: none;
             position: fixed;
@@ -1131,7 +1176,6 @@
             color: var(--danger-color);
         }
 
-        /* Toast */
         .toast-notification {
             position: fixed;
             bottom: 20px;
@@ -1147,7 +1191,6 @@
             word-wrap: break-word;
         }
 
-        /* Responsive */
         @media screen and (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
@@ -1247,7 +1290,6 @@
 </head>
 <body>
     <div class="dashboard">
-        <!-- Sidebar -->
         <aside class="sidebar" id="sidebar">
             <div class="sidebar-header">
                 <img src="../images/logo/logo.png" alt="Logo" onerror="this.src='https://via.placeholder.com/50x50?text=Logo'">
@@ -1282,9 +1324,7 @@
             </div>
         </aside>
 
-        <!-- Main Content -->
         <main class="main-content">
-            <!-- Top Bar -->
             <div class="top-bar">
                 <div class="top-bar-left">
                     <div class="top-bar-logo">
@@ -1318,7 +1358,6 @@
                 </div>
             </div>
 
-            <!-- Dashboard Panel -->
             <div id="dashboard-panel" class="admin-panel active">
                 <div class="stats-cards" id="dashboard-stats">
                     <div class="loading">Chargement...</div>
@@ -1373,7 +1412,6 @@
                 </div>
             </div>
 
-            <!-- Users Panel -->
             <div id="users-panel" class="admin-panel">
                 <h2>Gestion des utilisateurs</h2>
                 
@@ -1415,7 +1453,6 @@
                 </div>
             </div>
 
-            <!-- Events Panel -->
             <div id="events-panel" class="admin-panel">
                 <h2>Gestion des événements</h2>
                 
@@ -1518,7 +1555,6 @@
                 </div>
             </div>
 
-            <!-- Activities Panel -->
             <div id="activities-panel" class="admin-panel">
                 <h2>Gestion des activités</h2>
                 
@@ -1598,7 +1634,6 @@
                 </div>
             </div>
 
-            <!-- Team Panel -->
             <div id="team-panel" class="admin-panel">
                 <h2>Gestion de l'équipe</h2>
                 
@@ -1683,7 +1718,6 @@
                 </div>
             </div>
 
-            <!-- Announcements Panel -->
             <div id="announcements-panel" class="admin-panel">
                 <h2>Gestion des annonces</h2>
                 
@@ -1737,7 +1771,6 @@
                 <div class="announcements-list" id="announcements-list"></div>
             </div>
 
-            <!-- Reports Panel -->
             <div id="reports-panel" class="admin-panel">
                 <h2>Gestion des comptes rendus</h2>
                 
@@ -1796,7 +1829,6 @@
                 <div class="reports-list" id="reports-list"></div>
             </div>
 
-            <!-- Gallery Panel -->
             <div id="gallery-panel" class="admin-panel">
                 <h2>Gestion de la galerie</h2>
                 
@@ -1847,7 +1879,6 @@
                 <div class="gallery-grid" id="gallery-grid"></div>
             </div>
 
-            <!-- Content Panel -->
             <div id="content-panel" class="admin-panel">
                 <h2>Gestion du contenu</h2>
                 
@@ -1910,7 +1941,6 @@
                 </div>
             </div>
 
-            <!-- Logs Panel -->
             <div id="logs-panel" class="admin-panel">
                 <h2>Journal d'activité</h2>
                 
@@ -1922,7 +1952,6 @@
                 <div id="activity-logs"></div>
             </div>
 
-            <!-- Settings Panel -->
             <div id="settings-panel" class="admin-panel">
                 <h2>Paramètres</h2>
                 
@@ -1976,7 +2005,6 @@
         </main>
     </div>
 
-    <!-- Modals -->
     <div id="userModal" class="modal">
         <div class="modal-content modal-lg">
             <span class="close" onclick="closeModal('userModal')">&times;</span>
@@ -2017,14 +2045,12 @@
         </div>
     </div>
 
-    <!-- Lightbox -->
     <div class="lightbox" id="lightbox">
         <span class="close-lightbox" onclick="closeLightbox()">&times;</span>
         <img class="lightbox-content" id="lightbox-img" src="" alt="Agrandissement">
     </div>
 
     <script>
-        // ==================== VARIABLES GLOBALES ====================
         let currentUser = window.currentUser || null;
         let currentPanel = 'dashboard';
         let usersData = [];
@@ -2041,7 +2067,6 @@
         let currentItemId = null;
         let currentAction = null;
 
-        // ==================== INITIALISATION ====================
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('Page admin chargée, initialisation...');
             
@@ -2065,7 +2090,6 @@
             initLightbox();
         });
 
-        // ==================== MISE À JOUR DE L'INTERFACE ====================
         async function updateUI() {
             if (!currentUser) return;
             
@@ -2085,7 +2109,6 @@
             await loadNotifications();
         }
 
-        // ==================== CHARGEMENT DES NOTIFICATIONS ====================
         async function loadNotifications() {
             if (!currentUser) return;
             
@@ -2104,12 +2127,10 @@
             }
         }
 
-        // ==================== CHARGEMENT DU DASHBOARD ====================
         async function loadDashboardData() {
             if (!currentUser) return;
             
             try {
-                // Statistiques
                 const membersCount = await window.supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'member');
                 const pendingCount = await window.supabase.from('users').select('*', { count: 'exact', head: true }).eq('role', 'pending');
                 const eventsCount = await window.supabase.from('events').select('*', { count: 'exact', head: true });
@@ -2148,7 +2169,6 @@
                     </div>
                 `;
 
-                // Membres en attente
                 const { data: pending } = await window.supabase
                     .from('users')
                     .select('*')
@@ -2176,7 +2196,6 @@
                     pendingTable.innerHTML = '<tr><td colspan="6" class="no-data">Aucune demande en attente</td></tr>';
                 }
 
-                // Événements à venir
                 const { data: upcoming } = await window.supabase
                     .from('events')
                     .select('*')
@@ -2206,7 +2225,6 @@
                     eventsTable.innerHTML = '<tr><td colspan="5" class="no-data">Aucun événement à venir</td></tr>';
                 }
 
-                // Activités récentes
                 const { data: logs } = await window.supabase
                     .from('activity_logs')
                     .select(`
@@ -2236,7 +2254,6 @@
             }
         }
 
-        // ==================== CHARGEMENT DE TOUTES LES DONNÉES ====================
         async function loadAllData() {
             await loadUsers();
             await loadEvents();
@@ -2250,7 +2267,6 @@
             await loadLogs();
         }
 
-        // ==================== GESTION DES UTILISATEURS ====================
         async function loadUsers(filter = 'all') {
             if (!currentUser) return;
             
@@ -2312,7 +2328,6 @@
             }
         }
 
-        // ==================== APPROBATION MEMBRE ====================
         window.approveMember = async function(userId) {
             try {
                 const { error } = await window.supabase
@@ -2326,17 +2341,16 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Membre approuvé avec succès', 'success');
+                showToast('Membre approuvé avec succès', 'success');
                 await loadUsers('pending');
                 await loadDashboardData();
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         };
 
-        // ==================== REJET MEMBRE ====================
         window.rejectMember = async function(userId) {
             if (!confirm('Rejeter cette demande d\'adhésion ?')) return;
             
@@ -2348,17 +2362,16 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Demande rejetée', 'success');
+                showToast('Demande rejetée', 'success');
                 await loadUsers('pending');
                 await loadDashboardData();
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         };
 
-        // ==================== AFFICHAGE DÉTAILS UTILISATEUR ====================
         window.viewUser = async function(userId) {
             const user = usersData.find(u => u.id === userId);
             if (!user) return;
@@ -2405,7 +2418,6 @@
             openModal('userModal');
         };
 
-        // ==================== SUPPRESSION UTILISATEUR ====================
         window.confirmDeleteUser = function(userId) {
             currentItemId = userId;
             currentAction = 'deleteUser';
@@ -2422,7 +2434,7 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Utilisateur supprimé avec succès', 'success');
+                showToast('Utilisateur supprimé avec succès', 'success');
                 closeModal('confirmModal');
                 closeModal('userModal');
                 await loadUsers(currentFilter);
@@ -2430,11 +2442,10 @@
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
-        // ==================== GESTION DES PERMISSIONS ====================
         window.showPermissionsModal = function(userId) {
             const user = usersData.find(u => u.id === userId);
             if (!user) return;
@@ -2492,17 +2503,16 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Permissions mises à jour', 'success');
+                showToast('Permissions mises à jour', 'success');
                 closeModal('permissionsModal');
                 await loadUsers(currentFilter);
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         };
 
-        // ==================== GESTION DES ÉVÉNEMENTS ====================
         async function loadEvents(filter = 'upcoming') {
             const eventsTable = document.getElementById('events-table');
             
@@ -2607,7 +2617,7 @@
                         .eq('id', eventId);
                     
                     if (error) throw error;
-                    window.showToast('Événement modifié avec succès', 'success');
+                    showToast('Événement modifié avec succès', 'success');
                 } else {
                     eventData.created_by = currentUser.id;
                     eventData.created_at = new Date().toISOString();
@@ -2616,7 +2626,7 @@
                         .insert([eventData]);
                     
                     if (error) throw error;
-                    window.showToast('Événement créé avec succès', 'success');
+                    showToast('Événement créé avec succès', 'success');
                 }
                 
                 hideEventForm();
@@ -2625,7 +2635,7 @@
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         };
 
@@ -2645,14 +2655,14 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Événement supprimé avec succès', 'success');
+                showToast('Événement supprimé avec succès', 'success');
                 closeModal('confirmModal');
                 await loadEvents(currentFilter);
                 await loadDashboardData();
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
@@ -2661,10 +2671,9 @@
             if (!event) return;
             
             const date = new Date(event.date);
-            window.showToast(`Événement: ${event.title}\n\nDate: ${date.toLocaleString()}\nLieu: ${event.location}\nParticipants: ${event.current_participants || 0}/${event.max_participants || '∞'}\nDescription: ${event.description}`, 'info');
+            showToast(`Événement: ${event.title}\n\nDate: ${date.toLocaleString()}\nLieu: ${event.location}\nParticipants: ${event.current_participants || 0}/${event.max_participants || '∞'}\nDescription: ${event.description}`, 'info');
         };
 
-        // ==================== GESTION DES ACTIVITÉS ====================
         async function loadActivities() {
             const activitiesTable = document.getElementById('activities-table');
             
@@ -2685,7 +2694,7 @@
                             <tr>
                                 <td>${a.title || ''}</td>
                                 <td>${date.toLocaleDateString()}</td>
-                                <td>${window.getCategoryLabel(a.category)}</td>
+                                <td>${getCategoryLabel(a.category)}</td>
                                 <td>${a.location || '-'}</td>
                                 <td class="member-actions">
                                     <button class="btn-icon view" onclick="viewActivity('${a.id}')" title="Voir"><i class="fas fa-eye"></i></button>
@@ -2759,7 +2768,7 @@
                         .eq('id', activityId);
                     
                     if (error) throw error;
-                    window.showToast('Activité modifiée avec succès', 'success');
+                    showToast('Activité modifiée avec succès', 'success');
                 } else {
                     activityData.created_by = currentUser.id;
                     activityData.created_at = new Date().toISOString();
@@ -2768,7 +2777,7 @@
                         .insert([activityData]);
                     
                     if (error) throw error;
-                    window.showToast('Activité créée avec succès', 'success');
+                    showToast('Activité créée avec succès', 'success');
                 }
                 
                 hideActivityForm();
@@ -2776,7 +2785,7 @@
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         };
 
@@ -2796,13 +2805,13 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Activité supprimée avec succès', 'success');
+                showToast('Activité supprimée avec succès', 'success');
                 closeModal('confirmModal');
                 await loadActivities();
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
@@ -2811,10 +2820,9 @@
             if (!activity) return;
             
             const date = activity.date ? new Date(activity.date) : new Date();
-            window.showToast(`Activité: ${activity.title}\n\nDate: ${date.toLocaleDateString()}\nLieu: ${activity.location}\nCatégorie: ${window.getCategoryLabel(activity.category)}\nDescription: ${activity.description}`, 'info');
+            showToast(`Activité: ${activity.title}\n\nDate: ${date.toLocaleDateString()}\nLieu: ${activity.location}\nCatégorie: ${getCategoryLabel(activity.category)}\nDescription: ${activity.description}`, 'info');
         };
 
-        // ==================== GESTION DE L'ÉQUIPE ====================
         async function loadTeam() {
             const teamTable = document.getElementById('team-table');
             
@@ -2917,7 +2925,7 @@
                         .eq('id', memberId);
                     
                     if (error) throw error;
-                    window.showToast('Membre modifié avec succès', 'success');
+                    showToast('Membre modifié avec succès', 'success');
                 } else {
                     memberData.created_at = new Date().toISOString();
                     const { error } = await window.supabase
@@ -2925,7 +2933,7 @@
                         .insert([memberData]);
                     
                     if (error) throw error;
-                    window.showToast('Membre ajouté avec succès', 'success');
+                    showToast('Membre ajouté avec succès', 'success');
                 }
                 
                 hideTeamForm();
@@ -2933,7 +2941,7 @@
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         };
 
@@ -2953,13 +2961,13 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Membre supprimé avec succès', 'success');
+                showToast('Membre supprimé avec succès', 'success');
                 closeModal('confirmModal');
                 await loadTeam();
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
@@ -2967,10 +2975,9 @@
             const member = teamData.find(m => m.id === memberId);
             if (!member) return;
             
-            window.showToast(`${member.prenom || ''} ${member.nom || ''}\nRôle: ${member.role}\nBio: ${member.bio || 'Aucune biographie'}`, 'info');
+            showToast(`${member.prenom || ''} ${member.nom || ''}\nRôle: ${member.role}\nBio: ${member.bio || 'Aucune biographie'}`, 'info');
         };
 
-        // ==================== GESTION DES ANNONCES ====================
         async function loadAnnouncements() {
             const announcementsList = document.getElementById('announcements-list');
             
@@ -3056,7 +3063,7 @@
                         .eq('id', announcementId);
                     
                     if (error) throw error;
-                    window.showToast('Annonce modifiée avec succès', 'success');
+                    showToast('Annonce modifiée avec succès', 'success');
                 } else {
                     announcementData.created_by = currentUser.id;
                     announcementData.created_at = new Date().toISOString();
@@ -3065,7 +3072,7 @@
                         .insert([announcementData]);
                     
                     if (error) throw error;
-                    window.showToast('Annonce créée avec succès', 'success');
+                    showToast('Annonce créée avec succès', 'success');
                 }
                 
                 hideAnnouncementForm();
@@ -3073,7 +3080,7 @@
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         };
 
@@ -3093,17 +3100,16 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Annonce supprimée avec succès', 'success');
+                showToast('Annonce supprimée avec succès', 'success');
                 closeModal('confirmModal');
                 await loadAnnouncements();
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
-        // ==================== GESTION DES COMPTES RENDUS ====================
         async function loadReports() {
             const reportsList = document.getElementById('reports-list');
             
@@ -3130,7 +3136,7 @@
                             <div class="announcement-date">
                                 ${new Date(r.created_at).toLocaleDateString()} - Activité: ${r.activities?.title || 'Non associée'}
                             </div>
-                            <p>${window.truncateText(r.content || '', 200)}...</p>
+                            <p>${truncateText(r.content || '', 200)}...</p>
                             ${r.images?.length ? `<p><strong>Images:</strong> ${r.images.length}</p>` : ''}
                             <div class="member-actions">
                                 <button class="btn-icon view" onclick="viewReport('${r.id}')"><i class="fas fa-eye"></i></button>
@@ -3226,7 +3232,7 @@
                         .eq('id', reportId);
                     
                     if (error) throw error;
-                    window.showToast('Compte rendu modifié avec succès', 'success');
+                    showToast('Compte rendu modifié avec succès', 'success');
                 } else {
                     reportData.created_by = currentUser.id;
                     reportData.created_at = new Date().toISOString();
@@ -3235,7 +3241,7 @@
                         .insert([reportData]);
                     
                     if (error) throw error;
-                    window.showToast('Compte rendu créé avec succès', 'success');
+                    showToast('Compte rendu créé avec succès', 'success');
                 }
                 
                 hideReportForm();
@@ -3243,7 +3249,7 @@
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         };
 
@@ -3263,13 +3269,13 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Compte rendu supprimé avec succès', 'success');
+                showToast('Compte rendu supprimé avec succès', 'success');
                 closeModal('confirmModal');
                 await loadReports();
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
@@ -3277,10 +3283,9 @@
             const report = reportsData.find(r => r.id === reportId);
             if (!report) return;
             
-            window.showToast(`${report.title}\n\n${report.content}`, 'info', 5000);
+            showToast(`${report.title}\n\n${report.content}`, 'info', 5000);
         };
 
-        // ==================== GESTION DE LA GALERIE ====================
         async function loadGallery() {
             const galleryGrid = document.getElementById('gallery-grid');
             
@@ -3330,7 +3335,7 @@
         };
 
         window.editGalleryItem = function(itemId) {
-            window.showToast('Édition d\'image en développement', 'info');
+            showToast('Édition d\'image en développement', 'info');
         };
 
         window.confirmDeleteGalleryItem = function(itemId) {
@@ -3349,23 +3354,22 @@
                 
                 if (error) throw error;
                 
-                window.showToast('Image supprimée avec succès', 'success');
+                showToast('Image supprimée avec succès', 'success');
                 closeModal('confirmModal');
                 await loadGallery();
                 
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
         window.saveGalleryItems = async function(e) {
             e.preventDefault();
-            window.showToast('Ajout d\'images en développement', 'info');
+            showToast('Ajout d\'images en développement', 'info');
             hideGalleryForm();
         };
 
-        // ==================== GESTION DU CONTENU ====================
         async function loadContent() {
             try {
                 const { data: history } = await window.supabase
@@ -3527,7 +3531,6 @@
             }
         }
 
-        // ==================== FONCTIONS UTILITAIRES ====================
         window.showPanel = function(panel) {
             document.querySelectorAll('.admin-panel').forEach(p => p.classList.remove('active'));
             document.getElementById(panel + '-panel').classList.add('active');
@@ -3661,17 +3664,33 @@
             return labels[status] || status;
         }
 
+        function getCategoryLabel(category) {
+            const labels = {
+                'environnement': 'Environnement',
+                'social': 'Social',
+                'culture': 'Culture',
+                'education': 'Éducation',
+                'general': 'Général'
+            };
+            return labels[category] || 'Général';
+        }
+
+        function truncateText(text, maxLength) {
+            if (!text) return '';
+            return text.length > maxLength ? text.substring(0, maxLength) + '...' : text;
+        }
+
         window.viewProfile = function() {
             showPanel('users');
             viewUser(currentUser.id);
         };
 
         window.editProfile = function() {
-            window.showToast('Fonctionnalité d\'édition de profil en développement', 'info');
+            showToast('Fonctionnalité d\'édition de profil en développement', 'info');
         };
 
         window.showNotifications = function() {
-            window.showToast('Fonctionnalité de notifications en développement', 'info');
+            showToast('Fonctionnalité de notifications en développement', 'info');
         };
 
         function showContentTab(tab) {
@@ -3725,10 +3744,10 @@
                     }, { onConflict: 'page,section' });
                 
                 if (error) throw error;
-                window.showToast('Contenu enregistré avec succès', 'success');
+                showToast('Contenu enregistré avec succès', 'success');
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
@@ -3767,10 +3786,10 @@
                     if (error) throw error;
                 }
                 
-                window.showToast('Valeurs enregistrées avec succès', 'success');
+                showToast('Valeurs enregistrées avec succès', 'success');
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
@@ -3808,19 +3827,19 @@
                     if (error) throw error;
                 }
                 
-                window.showToast('Timeline enregistrée avec succès', 'success');
+                showToast('Timeline enregistrée avec succès', 'success');
             } catch (error) {
                 console.error('Erreur:', error);
-                window.showToast('Erreur: ' + error.message, 'error');
+                showToast('Erreur: ' + error.message, 'error');
             }
         }
 
         function searchLogs() {
-            window.showToast('Recherche de logs en développement', 'info');
+            showToast('Recherche de logs en développement', 'info');
         }
 
         function saveSettings() {
-            window.showToast('Paramètres enregistrés avec succès', 'success');
+            showToast('Paramètres enregistrés avec succès', 'success');
         }
 
         function setupEventListeners() {
@@ -3854,7 +3873,6 @@
             }
         }
 
-        // ==================== LIGHTBOX ====================
         function initLightbox() {
             const lightbox = document.getElementById('lightbox');
             const lightboxImg = document.getElementById('lightbox-img');
@@ -3892,8 +3910,7 @@
             document.body.style.overflow = 'auto';
         };
 
-        // ==================== TOAST ====================
-        window.showToast = function(message, type = 'info', duration = 3000) {
+        function showToast(message, type = 'info', duration = 3000) {
             const oldToast = document.querySelector('.toast-notification');
             if (oldToast) oldToast.remove();
             
@@ -3918,9 +3935,8 @@
                 toast.style.opacity = '0';
                 setTimeout(() => toast.remove(), 300);
             }, duration);
-        };
+        }
 
-        // ==================== DÉCONNEXION ====================
         window.logout = async function() {
             try {
                 await window.supabase.auth.signOut();
@@ -3932,10 +3948,9 @@
             }
         };
 
-        // ==================== FONCTIONS MANQUANTES ====================
-        window.editUser = function(userId) { window.showToast('Édition d\'utilisateur en développement', 'info'); };
-        window.editUserFromModal = function() { window.showToast('Édition d\'utilisateur en développement', 'info'); };
-        window.deleteUserFromModal = function() { window.showToast('Suppression d\'utilisateur en développement', 'info'); };
+        window.editUser = function(userId) { showToast('Édition d\'utilisateur en développement', 'info'); };
+        window.editUserFromModal = function() { showToast('Édition d\'utilisateur en développement', 'info'); };
+        window.deleteUserFromModal = function() { showToast('Suppression d\'utilisateur en développement', 'info'); };
     </script>
 </body>
 </html>
