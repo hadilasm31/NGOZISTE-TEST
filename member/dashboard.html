@@ -10,52 +10,17 @@
     <!-- Configuration Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="../supabase-config.js"></script>
-    <script>
-    // Enregistrer le service worker
-    if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('/service-worker.js')
-                .then(registration => {
-                    console.log('ServiceWorker enregistré:', registration.scope);
-                })
-                .catch(error => {
-                    console.log('Erreur ServiceWorker:', error);
-                });
-        });
-    }
-
-    // Détection de la connexion
-    function checkConnection() {
-        if (!navigator.onLine) {
-            window.location.href = 'offline.html';
-        }
-    }
-
-    // Vérifier au chargement
-    window.addEventListener('load', checkConnection);
-
-    // Vérifier quand la connexion change
-    window.addEventListener('offline', () => {
-        window.location.href = 'offline.html';
-    });
-
-    window.addEventListener('online', () => {
-        console.log('Connexion rétablie');
-    });
-
-    // Vérification périodique
-    setInterval(checkConnection, 30000); // Toutes les 30 secondes
-</script>
-
-
     
     <!-- Vérification d'authentification -->
     <script>
         (async function() {
             try {
+                console.log('🔍 Vérification authentification membre...');
+                
                 const { data: { session } } = await window.supabase.auth.getSession();
                 
                 if (!session) {
+                    console.log('❌ Pas de session, redirection vers login');
                     window.location.href = '../login.html';
                     return;
                 }
@@ -67,24 +32,36 @@
                     .single();
                 
                 if (error || !userData) {
+                    console.error('❌ Erreur récupération utilisateur:', error);
                     window.location.href = '../login.html';
                     return;
                 }
                 
                 if (userData.role === 'admin' || userData.role === 'super_admin') {
+                    console.log('👑 Utilisateur admin, redirection vers admin dashboard');
                     window.location.href = '../admin/dashboard.html';
                     return;
                 }
                 
                 if (userData.role !== 'member') {
+                    console.log('❌ Rôle incorrect:', userData.role);
                     await window.supabase.auth.signOut();
                     window.location.href = '../index.html';
                     return;
                 }
                 
+                if (userData.status !== 'active') {
+                    console.log('❌ Compte inactif');
+                    await window.supabase.auth.signOut();
+                    window.location.href = '../login.html';
+                    return;
+                }
+                
                 window.currentUser = userData;
+                console.log('✅ Membre authentifié:', userData.prenom);
+                
             } catch (error) {
-                console.error('Erreur auth:', error);
+                console.error('❌ Erreur auth:', error);
                 window.location.href = '../login.html';
             }
         })();
@@ -132,6 +109,7 @@
             height: 100vh;
             overflow-y: auto;
             z-index: 100;
+            transition: transform 0.3s ease;
         }
 
         .sidebar-header {
@@ -246,6 +224,7 @@
             padding: 30px;
         }
 
+        /* Content Header */
         .content-header {
             display: flex;
             justify-content: space-between;
@@ -308,6 +287,11 @@
             border-radius: 50%;
             object-fit: cover;
             border: 2px solid var(--primary-color);
+        }
+
+        .user-name {
+            font-weight: 500;
+            color: var(--dark-color);
         }
 
         /* User Menu Dropdown */
@@ -517,16 +501,6 @@
             color: #2e7d32;
         }
 
-        .event-status.cancelled {
-            background: #ffebee;
-            color: #c62828;
-        }
-
-        .event-status.waiting {
-            background: #fff3e0;
-            color: #ef6c00;
-        }
-
         /* Messages List */
         .messages-list {
             display: flex;
@@ -610,6 +584,8 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 10px;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .announcement-header h3 {
@@ -1176,6 +1152,60 @@
             color: var(--danger-color);
         }
 
+        /* Lightbox */
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 2000;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .lightbox.active {
+            display: flex;
+        }
+
+        .lightbox-content {
+            max-width: 90%;
+            max-height: 90%;
+            object-fit: contain;
+        }
+
+        .close-lightbox {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: white;
+            font-size: 40px;
+            cursor: pointer;
+            transition: var(--transition);
+        }
+
+        .close-lightbox:hover {
+            color: var(--danger-color);
+        }
+
+        /* Toast */
+        .toast-notification {
+            position: fixed;
+            bottom: 20px;
+            right: 20px;
+            padding: 12px 20px;
+            border-radius: 8px;
+            color: white;
+            z-index: 3000;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+            max-width: 300px;
+            word-wrap: break-word;
+        }
+
         /* États */
         .loading {
             text-align: center;
@@ -1217,8 +1247,6 @@
         @media screen and (max-width: 768px) {
             .sidebar {
                 transform: translateX(-100%);
-                transition: transform 0.3s ease;
-                z-index: 1000;
             }
             
             .sidebar.active {
@@ -1294,10 +1322,6 @@
                 grid-template-columns: 1fr;
             }
             
-            .member-stat-card {
-                padding: 15px;
-            }
-            
             .profile-avatar {
                 width: 100px;
                 height: 100px;
@@ -1305,6 +1329,15 @@
             
             .profile-info h2 {
                 font-size: 1.5rem;
+            }
+            
+            .event-date-badge {
+                min-width: 50px;
+                height: 50px;
+            }
+            
+            .event-date-badge .day {
+                font-size: 1.2rem;
             }
         }
     </style>
@@ -1565,6 +1598,12 @@
         </div>
     </div>
 
+    <!-- Lightbox -->
+    <div class="lightbox" id="lightbox">
+        <span class="close-lightbox" onclick="closeLightbox()">&times;</span>
+        <img class="lightbox-content" id="lightbox-img" src="" alt="Agrandissement">
+    </div>
+
     <script>
         // ==================== VARIABLES GLOBALES ====================
         let currentUser = window.currentUser || null;
@@ -1575,17 +1614,20 @@
             console.log('Page membre chargée, initialisation...');
             
             if (!window.currentUser) {
-                setTimeout(() => {
-                    if (!window.currentUser) {
-                        window.location.href = '../login.html';
-                    }
-                }, 1000);
-                return;
+                console.log('En attente de currentUser...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+                
+                if (!window.currentUser) {
+                    console.error('currentUser toujours non défini');
+                    window.location.href = '../login.html';
+                    return;
+                }
             }
             
             currentUser = window.currentUser;
             await updateUI();
             await loadDashboard();
+            initLightbox();
         });
 
         // ==================== MISE À JOUR DE L'INTERFACE ====================
@@ -1606,6 +1648,8 @@
 
         // ==================== CHARGEMENT DES NOTIFICATIONS ====================
         async function loadNotifications() {
+            if (!currentUser) return;
+            
             try {
                 const { data, error } = await window.supabase
                     .from('notifications')
@@ -1623,11 +1667,12 @@
 
         // ==================== CHARGEMENT DU DASHBOARD ====================
         async function loadDashboard() {
+            if (!currentUser) return;
+            
             try {
                 // Statistiques
                 const statsContainer = document.getElementById('member-stats');
                 
-                // Récupérer les inscriptions
                 const { data: registrations } = await window.supabase
                     .from('event_registrations')
                     .select(`
@@ -1641,7 +1686,6 @@
                     r.events && new Date(r.events.date) > new Date()
                 ) || [];
                 
-                // Récupérer les messages non lus
                 const { data: messages } = await window.supabase
                     .from('messages')
                     .select('*')
@@ -1699,7 +1743,7 @@
                             <div class="announcement-date">
                                 ${a.created_at ? new Date(a.created_at).toLocaleDateString('fr-FR') : '-'}
                             </div>
-                            <p>${a.content ? window.truncateText(a.content, 150) : ''}...</p>
+                            <p>${window.truncateText(a.content || '', 150)}...</p>
                         </div>
                     `).join('');
                 } else {
@@ -1840,7 +1884,9 @@
         }
 
         // ==================== CHARGEMENT DES ÉVÉNEMENTS ====================
-        async function loadEventsTab(type) {
+        window.loadEventsTab = async function(type) {
+            if (!currentUser) return;
+            
             document.querySelectorAll('#events-panel .admin-tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             
@@ -1922,10 +1968,10 @@
                 console.error('Erreur:', error);
                 container.innerHTML = '<p class="error">Erreur de chargement</p>';
             }
-        }
+        };
 
         // ==================== FILTRAGE DES ACTIVITÉS ====================
-        async function filterActivities(category) {
+        window.filterActivities = async function(category) {
             document.querySelectorAll('#activities-panel .filter-btn').forEach(b => b.classList.remove('active'));
             event.target.classList.add('active');
             
@@ -1954,7 +2000,7 @@
                         return `
                             <div class="activity-card">
                                 <div class="activity-image">
-                                    <img src="${activityImage}" alt="${activity.title || ''}" onerror="this.src='../images/activities/default.jpg'">
+                                    <img src="${activityImage}" alt="${activity.title || ''}" onclick="openLightbox('${activityImage}')" onerror="this.src='../images/activities/default.jpg'">
                                     <span class="activity-category">${window.getCategoryLabel(activity.category)}</span>
                                 </div>
                                 <div class="activity-content">
@@ -1983,7 +2029,7 @@
                 console.error('Erreur:', error);
                 container.innerHTML = '<p class="error">Erreur de chargement</p>';
             }
-        }
+        };
 
         // ==================== CHARGEMENT DES ANNONCES ====================
         async function loadAnnouncements() {
@@ -2022,7 +2068,9 @@
         }
 
         // ==================== CHARGEMENT DES MESSAGES ====================
-        async function loadMessagesTab(folder) {
+        window.loadMessagesTab = async function(folder) {
+            if (!currentUser) return;
+            
             document.querySelectorAll('#messages-panel .admin-tab').forEach(t => t.classList.remove('active'));
             event.target.classList.add('active');
             
@@ -2081,7 +2129,7 @@
             }
             
             await loadUsersForMessage();
-        }
+        };
 
         // ==================== CHARGEMENT DES UTILISATEURS POUR MESSAGERIE ====================
         async function loadUsersForMessage() {
@@ -2107,6 +2155,8 @@
 
         // ==================== AFFICHAGE DES DÉTAILS D'ÉVÉNEMENT ====================
         window.showEventDetails = async function(eventId) {
+            if (!currentUser) return;
+            
             const { data: event, error } = await window.supabase
                 .from('events')
                 .select('*')
@@ -2115,7 +2165,6 @@
             
             if (error || !event) return;
             
-            // Vérifier si l'utilisateur est déjà inscrit
             const { data: registration } = await window.supabase
                 .from('event_registrations')
                 .select('*')
@@ -2187,24 +2236,27 @@
         window.registerToEvent = async function(e, eventId) {
             e.preventDefault();
             
+            if (!currentUser) {
+                alert('Veuillez vous connecter pour vous inscrire');
+                window.location.href = '../login.html';
+                return;
+            }
+            
             const guests = parseInt(document.getElementById('guests').value);
             const message = document.getElementById('message').value;
             
             try {
-                // Récupérer l'événement
                 const { data: event } = await window.supabase
                     .from('events')
                     .select('*')
                     .eq('id', eventId)
                     .single();
                 
-                // Vérifier la capacité
                 if (event.max_participants && (event.current_participants + guests + 1) > event.max_participants) {
                     window.showToast('Plus de places disponibles', 'error');
                     return;
                 }
                 
-                // Créer l'inscription
                 const { error: regError } = await window.supabase
                     .from('event_registrations')
                     .insert([{
@@ -2212,12 +2264,12 @@
                         user_id: currentUser.id,
                         guests: guests,
                         message: message,
+                        status: 'confirmed',
                         registered_at: new Date().toISOString()
                     }]);
                 
                 if (regError) throw regError;
                 
-                // Mettre à jour le compteur
                 await window.supabase
                     .from('events')
                     .update({ 
@@ -2253,14 +2305,12 @@
                     .eq('user_id', currentUser.id)
                     .single();
                 
-                // Supprimer l'inscription
                 await window.supabase
                     .from('event_registrations')
                     .delete()
                     .eq('event_id', eventId)
                     .eq('user_id', currentUser.id);
                 
-                // Mettre à jour le compteur
                 await window.supabase
                     .from('events')
                     .update({ 
@@ -2288,7 +2338,6 @@
             
             if (error || !activity) return;
             
-            // Charger les rapports associés
             const { data: reports } = await window.supabase
                 .from('activity_reports')
                 .select('*')
@@ -2341,6 +2390,8 @@
         window.sendMessage = async function(e) {
             e.preventDefault();
             
+            if (!currentUser) return;
+            
             const receiverId = document.getElementById('message-receiver').value;
             const subject = document.getElementById('message-subject').value;
             const content = document.getElementById('message-content').value;
@@ -2376,7 +2427,6 @@
         // ==================== AFFICHAGE D'UN MESSAGE ====================
         window.viewMessage = async function(messageId) {
             try {
-                // Marquer comme lu
                 await window.supabase
                     .from('messages')
                     .update({ is_read: true, read_at: new Date().toISOString() })
@@ -2392,6 +2442,8 @@
 
         // ==================== ÉDITION DU PROFIL ====================
         window.editProfile = function() {
+            if (!currentUser) return;
+            
             const modal = document.getElementById('profileEditModal');
             
             document.getElementById('edit-nom').value = currentUser.nom || '';
@@ -2408,6 +2460,8 @@
         window.updateProfile = async function(e) {
             e.preventDefault();
             
+            if (!currentUser) return;
+            
             const updates = {
                 nom: document.getElementById('edit-nom').value,
                 prenom: document.getElementById('edit-prenom').value,
@@ -2421,9 +2475,7 @@
             const photoFile = document.getElementById('edit-photo').files[0];
             
             try {
-                // Gérer la photo si présente
                 if (photoFile) {
-                    // Ici, vous pouvez implémenter l'upload vers un bucket Supabase
                     updates.photo = URL.createObjectURL(photoFile);
                 }
                 
@@ -2434,10 +2486,9 @@
                 
                 if (error) throw error;
                 
-                // Mettre à jour l'utilisateur courant
                 currentUser = { ...currentUser, ...updates };
+                window.currentUser = currentUser;
                 
-                // Mettre à jour l'affichage
                 document.getElementById('user-name').textContent = `${currentUser.prenom || ''} ${currentUser.nom || ''}`.trim() || 'Membre';
                 if (updates.photo) {
                     document.getElementById('user-avatar').src = updates.photo;
@@ -2470,7 +2521,6 @@
             
             currentPanel = panelName;
             
-            // Charger les données selon le panneau
             if (panelName === 'events') {
                 loadEventsTab('upcoming');
             } else if (panelName === 'activities') {
@@ -2497,7 +2547,85 @@
             document.getElementById(modalId).classList.remove('active');
         };
 
-        // Fermer le menu utilisateur en cliquant ailleurs
+        // ==================== LIGHTBOX ====================
+        function initLightbox() {
+            const lightbox = document.getElementById('lightbox');
+            const lightboxImg = document.getElementById('lightbox-img');
+            const closeLightbox = document.querySelector('.close-lightbox');
+
+            window.openLightbox = function(src) {
+                lightboxImg.src = src;
+                lightbox.classList.add('active');
+                document.body.style.overflow = 'hidden';
+            };
+
+            closeLightbox.addEventListener('click', () => {
+                lightbox.classList.remove('active');
+                document.body.style.overflow = 'auto';
+            });
+
+            lightbox.addEventListener('click', (e) => {
+                if (e.target === lightbox) {
+                    lightbox.classList.remove('active');
+                    document.body.style.overflow = 'auto';
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'Escape' && lightbox.classList.contains('active')) {
+                    lightbox.classList.remove('active');
+                    document.body.style.overflow = 'auto';
+                }
+            });
+        }
+
+        window.closeLightbox = function() {
+            const lightbox = document.getElementById('lightbox');
+            lightbox.classList.remove('active');
+            document.body.style.overflow = 'auto';
+        };
+
+        // ==================== TOAST ====================
+        window.showToast = function(message, type = 'info', duration = 3000) {
+            const oldToast = document.querySelector('.toast-notification');
+            if (oldToast) oldToast.remove();
+            
+            const toast = document.createElement('div');
+            toast.className = 'toast-notification';
+            document.body.appendChild(toast);
+            
+            const colors = {
+                success: '#4CAF50',
+                error: '#f44336',
+                warning: '#ff9800',
+                info: '#2196F3'
+            };
+            
+            toast.style.backgroundColor = colors[type] || colors.info;
+            toast.textContent = message;
+            
+            toast.offsetHeight;
+            toast.style.opacity = '1';
+            
+            setTimeout(() => {
+                toast.style.opacity = '0';
+                setTimeout(() => toast.remove(), 300);
+            }, duration);
+        };
+
+        // ==================== DÉCONNEXION ====================
+        window.logout = async function() {
+            try {
+                await window.supabase.auth.signOut();
+                localStorage.removeItem('user_display');
+                localStorage.removeItem('rememberedEmail');
+                window.location.href = '../index.html';
+            } catch (error) {
+                console.error('Erreur déconnexion:', error);
+            }
+        };
+
+        // ==================== GESTION DES CLICS EXTERNES ====================
         document.addEventListener('click', (e) => {
             const menu = document.getElementById('user-menu-dropdown');
             const userMenu = document.querySelector('.user-menu');
@@ -2506,7 +2634,6 @@
             }
         });
 
-        // Fermer les modals en cliquant en dehors
         window.onclick = function(event) {
             const modals = document.querySelectorAll('.modal');
             modals.forEach(modal => {
