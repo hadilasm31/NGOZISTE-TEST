@@ -815,7 +815,7 @@
             if (forgotLink) {
                 forgotLink.addEventListener('click', function(e) {
                     e.preventDefault();
-                    showToast('Veuillez contacter l\'administrateur pour réinitialiser votre mot de passe', 'info');
+                    window.showToast('Veuillez contacter l\'administrateur pour réinitialiser votre mot de passe', 'info');
                 });
             }
         }
@@ -872,7 +872,7 @@
                 const fullName = `${user.prenom || ''} ${user.nom || ''}`.trim() || 'Utilisateur';
                 
                 authMenu.innerHTML = `
-                    <div class="user-profile" onclick="toggleUserDropdown(event)">
+                    <div class="user-profile" onclick="window.toggleUserDropdown(event)">
                         <img src="${photo}" alt="Profil" class="nav-avatar" id="nav-avatar" onerror="this.src='images/default-avatar.png'">
                         <span class="user-name">${fullName.split(' ')[0]}</span>
                         <i class="fas fa-chevron-down"></i>
@@ -896,7 +896,7 @@
 
             if (!currentUser) return;
 
-            const dashboardPath = (currentUser.role === 'admin' || currentUser.role === 'super_admin') ? 'admin' : 'member';
+            const dashboardPath = currentUser.role === 'admin' || currentUser.role === 'super_admin' ? 'admin' : 'member';
             
             dropdown.innerHTML = `
                 <div class="user-dropdown-header">
@@ -907,10 +907,10 @@
                     </div>
                 </div>
                 <div class="user-dropdown-menu">
-                    <a href="${dashboardPath}/dashboard.html" onclick="closeDropdownAndRedirect('${dashboardPath}/dashboard.html')">
+                    <a href="#" onclick="window.location.href='${dashboardPath}/dashboard.html'">
                         <i class="fas fa-tachometer-alt"></i> Tableau de bord
                     </a>
-                    <a href="${dashboardPath}/dashboard.html?panel=profile" onclick="closeDropdownAndRedirect('${dashboardPath}/dashboard.html?panel=profile')">
+                    <a href="#" onclick="window.location.href='${dashboardPath}/dashboard.html?panel=profile'">
                         <i class="fas fa-user"></i> Mon profil
                     </a>
                     <div class="dropdown-divider"></div>
@@ -935,12 +935,6 @@
                     }
                 });
             }, 100);
-        };
-
-        // ==================== FERMER DROPDOWN ET REDIRIGER ====================
-        window.closeDropdownAndRedirect = function(url) {
-            document.getElementById('user-dropdown').classList.remove('show');
-            window.location.href = url;
         };
 
         // ==================== GESTION DE LA CONNEXION ====================
@@ -1040,7 +1034,7 @@
                         photo: userData.photo || 'images/default-avatar.png',
                         name: `${userData.prenom || ''} ${userData.nom || ''}`.trim(),
                         role: userData.role,
-                        dashboard: (userData.role === 'admin' || userData.role === 'super_admin') ? 'admin' : 'member'
+                        dashboard: userData.role === 'admin' || userData.role === 'super_admin' ? 'admin' : 'member'
                     }));
                 } catch (e) {
                     console.warn('Impossible de sauvegarder user_display');
@@ -1116,7 +1110,7 @@
         }
 
         // ==================== TOAST NOTIFICATION ====================
-        function showToast(message, type = 'info', duration = 3000) {
+        window.showToast = function(message, type = 'info', duration = 3000) {
             const oldToast = document.querySelector('.toast-notification');
             if (oldToast) oldToast.remove();
             
@@ -1142,7 +1136,7 @@
                 toast.style.opacity = '0';
                 setTimeout(() => toast.remove(), 300);
             }, duration);
-        }
+        };
 
         // ==================== DÉCONNEXION ====================
         window.logout = async function() {
@@ -1166,10 +1160,6 @@
                 dropdown.classList.remove('show');
             }
         });
-
-        // ==================== RENDRE LES FONCTIONS GLOBALES ====================
-        window.showToast = showToast;
-        window.logout = logout;
     </script>
 </body>
 </html>
