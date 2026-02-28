@@ -264,7 +264,7 @@
 
     <script>
         // =====================================================
-        // PAGE DE CONNEXION - Script corrigé
+        // PAGE DE CONNEXION - Version corrigée
         // =====================================================
         
         document.addEventListener('DOMContentLoaded', function() {
@@ -310,15 +310,32 @@
 
         async function checkCurrentUser() {
             try {
-                const result = await window.getCurrentUser();
+                const { data: { session }, error } = await window.supabase.auth.getSession();
                 
-                if (result.user) {
+                if (error) {
+                    console.error('Erreur session:', error);
+                    return;
+                }
+                
+                if (session?.user) {
+                    // Récupérer les infos de l'utilisateur depuis la table users
+                    const { data: userData, error: userError } = await window.supabase
+                        .from('users')
+                        .select('*')
+                        .eq('id', session.user.id)
+                        .single();
+                    
+                    if (userError) {
+                        console.error('Erreur récupération profil:', userError);
+                        return;
+                    }
+                    
                     showAlert('Vous êtes déjà connecté. Redirection...', 'info');
                     
                     setTimeout(() => {
-                        if (result.user.role === 'super_admin' || result.user.role === 'admin') {
+                        if (userData.role === 'super_admin' || userData.role === 'admin') {
                             window.location.href = 'admin/dashboard.html';
-                        } else if (result.user.role === 'member') {
+                        } else if (userData.role === 'member') {
                             window.location.href = 'member/dashboard.html';
                         } else {
                             window.location.href = 'index.html';
@@ -363,40 +380,14 @@
             }
             
             try {
-                const result = await window.login(email, password);
+                // Connexion avec Supabase Auth
+                const { data: authData, error: authError } = await window.supabase.auth.signInWithPassword({
+                    email: email,
+                    password: password
+                });
                 
-                if (result.success) {
-                    // Sauvegarder l'email si demandé
-                    if (rememberCheckbox && rememberCheckbox.checked) {
-                        localStorage.setItem('rememberedEmail', email);
-                    } else {
-                        localStorage.removeItem('rememberedEmail');
-                    }
-                    
-                    // Sauvegarder l'utilisateur pour synchro
-                    localStorage.setItem('currentUser', JSON.stringify({
-                        id: result.user.id,
-                        nom: result.user.nom,
-                        prenom: result.user.prenom,
-                        email: result.user.email,
-                        role: result.user.role,
-                        photo: result.user.photo
-                    }));
-                    
-                    showAlert('Connexion réussie ! Redirection...', 'success');
-                    
-                    // Rediriger selon le rôle
-                    setTimeout(() => {
-                        if (result.user.role === 'super_admin' || result.user.role === 'admin') {
-                            window.location.href = 'admin/dashboard.html';
-                        } else if (result.user.role === 'member') {
-                            window.location.href = 'member/dashboard.html';
-                        } else {
-                            window.location.href = 'index.html';
-                        }
-                    }, 1500);
-                } else {
-                    showAlert(result.message || 'Email ou mot de passe incorrect', 'error');
+                if (authError) {
+                    showAlert(authError.message || 'Email ou mot de passe incorrect', 'error');
                     
                     if (loginBtn) {
                         loginBtn.disabled = false;
@@ -410,9 +401,95 @@
                             loginContainer.classList.remove('shake');
                         }, 500);
                     }
+                    return;
                 }
+                
+                if (!authData || !authData.user) {
+                    showAlert('Erreur de connexion', 'error');
+                    
+                    if (loginBtn) {
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
+                    }
+                    return;
+                }
+                
+                // Récupérer les informations de l'utilisateur depuis la table users
+                const { data: userData, error: userError } = await window.supabase
+                    .from('users')
+                    .select('*')
+                    .eq('id', authData.user.id)
+                    .single();
+                
+                if (userError) {
+                    console.error('Erreur récupération utilisateur:', userError);
+                    showAlert('Profil utilisateur non trouvé', 'error');
+                    
+                    // Déconnexion car profil non trouvé
+                    await window.supabase.auth.signOut();
+                    
+                    if (loginBtn) {
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
+                    }
+                    return;
+                }
+                
+                // Vérifier le statut
+                if (userData.role === 'pending') {
+                    await window.supabase.auth.signOut();
+                    showAlert('Votre compte est en attente de validation', 'info');
+                    
+                    if (loginBtn) {
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
+                    }
+                    return;
+                }
+                
+                if (userData.status === 'inactive') {
+                    await window.supabase.auth.signOut();
+                    showAlert('Votre compte a été désactivé', 'error');
+                    
+                    if (loginBtn) {
+                        loginBtn.disabled = false;
+                        loginBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Se connecter';
+                    }
+                    return;
+                }
+                
+                // Sauvegarder l'email si demandé
+                if (rememberCheckbox && rememberCheckbox.checked) {
+                    localStorage.setItem('rememberedEmail', email);
+                } else {
+                    localStorage.removeItem('rememberedEmail');
+                }
+                
+                // Sauvegarder l'utilisateur pour synchro
+                localStorage.setItem('currentUser', JSON.stringify({
+                    id: userData.id,
+                    nom: userData.nom,
+                    prenom: userData.prenom,
+                    email: userData.email,
+                    role: userData.role,
+                    photo: userData.photo
+                }));
+                
+                showAlert('Connexion réussie ! Redirection...', 'success');
+                
+                // Rediriger selon le rôle
+                setTimeout(() => {
+                    if (userData.role === 'super_admin' || userData.role === 'admin') {
+                        window.location.href = 'admin/dashboard.html';
+                    } else if (userData.role === 'member') {
+                        window.location.href = 'member/dashboard.html';
+                    } else {
+                        window.location.href = 'index.html';
+                    }
+                }, 1500);
+                
             } catch (error) {
-                console.error('Erreur:', error);
+                console.error('Erreur détaillée:', error);
                 showAlert('Une erreur est survenue. Veuillez réessayer.', 'error');
                 
                 if (loginBtn) {
@@ -460,11 +537,12 @@
             alertDiv.className = `alert ${type}`;
             alertDiv.style.display = 'block';
             
+            // Auto-cacher après 5 secondes
             setTimeout(() => {
                 if (alertDiv.style.display === 'block') {
                     alertDiv.style.display = 'none';
                 }
-            }, type === 'error' ? 5000 : 3000);
+            }, 5000);
         }
 
         function validateEmail(email) {
