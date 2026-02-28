@@ -38,6 +38,9 @@
             color: var(--text-color);
             padding-top: 80px;
             overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
 
         .container {
@@ -302,8 +305,8 @@
 
         /* Section Login */
         .login-section {
+            flex: 1;
             padding: 120px 0 60px;
-            min-height: calc(100vh - 80px);
             background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
             display: flex;
             align-items: center;
@@ -517,6 +520,7 @@
             background: var(--dark-color);
             color: white;
             padding: 60px 0 20px;
+            margin-top: auto;
         }
 
         .footer-grid {
@@ -611,6 +615,48 @@
             box-shadow: 0 5px 15px rgba(0,0,0,0.2);
             max-width: 300px;
             word-wrap: break-word;
+        }
+
+        /* Message d'erreur fichier manquant */
+        .file-error {
+            background: #ffebee;
+            border: 2px solid #f44336;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            text-align: left;
+        }
+
+        .file-error h3 {
+            color: #c62828;
+            margin-bottom: 15px;
+        }
+
+        .file-error p {
+            margin: 10px 0;
+            color: #333;
+        }
+
+        .file-error code {
+            background: #fff;
+            padding: 2px 5px;
+            border-radius: 3px;
+            color: #d32f2f;
+        }
+
+        .file-error button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin-top: 15px;
+            width: 100%;
+        }
+
+        .file-error button:hover {
+            background: #45a049;
         }
 
         /* Responsive */
@@ -724,6 +770,9 @@
                     Pas encore membre ? <a href="adhesion.html">Adhérez maintenant</a>
                 </div>
             </form>
+
+            <!-- Zone pour afficher les erreurs de redirection -->
+            <div id="redirect-error" style="display: none;"></div>
         </div>
     </section>
 
@@ -768,8 +817,6 @@
             initRememberedEmail();
             await checkCurrentUser();
             addShakeAnimation();
-            
-            // Initialiser le gestionnaire de formulaire
             initLoginForm();
         });
 
@@ -863,14 +910,11 @@
                         currentUser = userData;
                         updateAuthMenu(userData);
                         
-                        // Redirection immédiate si déjà connecté
-                        console.log('🔄 Redirection automatique vers le tableau de bord...');
+                        // Message de bienvenue
+                        showAlert(`Vous êtes déjà connecté en tant que ${userData.prenom || ''}. Redirection...`, 'success');
                         
-                        if (userData.role === 'admin' || userData.role === 'super_admin') {
-                            window.location.href = 'admin/dashboard.html';
-                        } else if (userData.role === 'member') {
-                            window.location.href = 'member/dashboard.html';
-                        }
+                        // Redirection immédiate
+                        await redirectToDashboard(userData);
                     }
                 } else {
                     console.log('❌ Aucune session active');
@@ -879,6 +923,66 @@
             } catch (error) {
                 console.error('Erreur lors de la vérification de l\'utilisateur:', error);
                 updateAuthMenu(null);
+            }
+        }
+
+        // ==================== REDIRECTION VERS LE TABLEAU DE BORD ====================
+        async function redirectToDashboard(userData) {
+            const dashboardUrl = (userData.role === 'admin' || userData.role === 'super_admin') 
+                ? 'admin/dashboard.html' 
+                : 'member/dashboard.html';
+            
+            console.log('🔄 Redirection vers:', dashboardUrl);
+            
+            // Vérifier si le fichier existe avant de rediriger
+            try {
+                const response = await fetch(dashboardUrl, { method: 'HEAD' });
+                
+                if (response.ok) {
+                    console.log('✅ Fichier trouvé, redirection...');
+                    window.location.href = dashboardUrl;
+                } else {
+                    console.error('❌ Fichier non trouvé:', dashboardUrl);
+                    showFileError(dashboardUrl, userData);
+                }
+            } catch (error) {
+                console.error('❌ Erreur lors de la vérification du fichier:', error);
+                showFileError(dashboardUrl, userData, error.message);
+            }
+        }
+
+        // ==================== AFFICHER ERREUR FICHIER MANQUANT ====================
+        function showFileError(url, userData, errorMsg = '') {
+            // Cacher le formulaire de connexion
+            const loginForm = document.getElementById('login-form');
+            const alertDiv = document.getElementById('login-alert');
+            const errorDiv = document.getElementById('redirect-error');
+            
+            if (loginForm) loginForm.style.display = 'none';
+            if (alertDiv) alertDiv.style.display = 'none';
+            
+            // Afficher le message d'erreur
+            if (errorDiv) {
+                errorDiv.style.display = 'block';
+                errorDiv.innerHTML = `
+                    <div class="file-error">
+                        <h3><i class="fas fa-exclamation-triangle"></i> Erreur de redirection</h3>
+                        <p>Bonjour <strong>${userData.prenom || ''} ${userData.nom || ''}</strong>,</p>
+                        <p>La connexion a réussi mais le fichier du tableau de bord est introuvable.</p>
+                        <p><strong>Rôle:</strong> ${userData.role}</p>
+                        <p><strong>Fichier attendu:</strong> <code>${url}</code></p>
+                        <p><strong>Erreur:</strong> ${errorMsg || 'Fichier non trouvé (404)'}</p>
+                        <p><strong>Solution:</strong></p>
+                        <ul style="text-align: left; margin: 10px 0 10px 20px;">
+                            <li>Vérifiez que le dossier <strong>${url.split('/')[0]}</strong> existe</li>
+                            <li>Vérifiez que le fichier <strong>${url}</strong> existe</li>
+                            <li>Vérifiez les permissions des fichiers</li>
+                        </ul>
+                        <button onclick="window.location.href='index.html'">
+                            <i class="fas fa-home"></i> Retour à l'accueil
+                        </button>
+                    </div>
+                `;
             }
         }
 
@@ -927,7 +1031,7 @@
                     </div>
                 </div>
                 <div class="user-dropdown-menu">
-                    <a href="#" onclick="redirectToDashboard('${dashboardPath}')">
+                    <a href="#" onclick="redirectToDashboardDirect('${dashboardPath}')">
                         <i class="fas fa-tachometer-alt"></i> Tableau de bord
                     </a>
                     <a href="#" onclick="redirectToProfile('${dashboardPath}')">
@@ -957,8 +1061,8 @@
             }, 100);
         };
 
-        // ==================== REDIRECTIONS ====================
-        window.redirectToDashboard = function(dashboardPath) {
+        // ==================== REDIRECTIONS DIRECTES ====================
+        window.redirectToDashboardDirect = function(dashboardPath) {
             window.location.href = `${dashboardPath}/dashboard.html`;
         };
 
@@ -985,7 +1089,6 @@
             
             console.log('🔐 Tentative de connexion pour:', email);
             
-            // Validation
             if (!email || !password) {
                 showAlert('Veuillez remplir tous les champs', 'error');
                 return;
@@ -996,7 +1099,6 @@
                 return;
             }
             
-            // Désactiver le bouton
             loginBtn.disabled = true;
             loginBtn.innerHTML = '<span class="loading-spinner"></span> Connexion...';
             
@@ -1026,7 +1128,6 @@
                 
                 console.log('✅ Authentification réussie pour:', data.user.email);
                 
-                // Récupérer les infos utilisateur
                 const { data: userData, error: userError } = await window.supabase
                     .from('users')
                     .select('*')
@@ -1040,7 +1141,6 @@
                 
                 console.log('✅ Profil utilisateur récupéré:', userData);
                 
-                // Vérifier le statut
                 if (userData.role === 'pending') {
                     await window.supabase.auth.signOut();
                     showAlert('Votre compte est en attente de validation par un administrateur', 'info');
@@ -1059,20 +1159,17 @@
                     return;
                 }
                 
-                // Mettre à jour la dernière connexion
                 await window.supabase
                     .from('users')
                     .update({ last_login: new Date().toISOString() })
                     .eq('id', data.user.id);
                 
-                // Sauvegarder l'email
                 if (remember) {
                     localStorage.setItem('rememberedEmail', email);
                 } else {
                     localStorage.removeItem('rememberedEmail');
                 }
                 
-                // Sauvegarder les infos pour la synchro entre onglets
                 try {
                     localStorage.setItem('user_display', JSON.stringify({
                         photo: userData.photo || 'images/default-avatar.png',
@@ -1084,17 +1181,10 @@
                     console.warn('Impossible de sauvegarder user_display');
                 }
                 
-                // Message de succès
                 showAlert(`Connexion réussie ! Bienvenue ${userData.prenom || ''}`, 'success');
                 
-                // Redirection immédiate
-                console.log('🔄 Redirection vers le tableau de bord...');
-                
-                if (userData.role === 'admin' || userData.role === 'super_admin') {
-                    window.location.href = 'admin/dashboard.html';
-                } else {
-                    window.location.href = 'member/dashboard.html';
-                }
+                // Redirection avec vérification
+                await redirectToDashboard(userData);
                 
             } catch (error) {
                 console.error('❌ Erreur:', error);
@@ -1114,7 +1204,6 @@
             alertDiv.className = `alert ${type}`;
             alertDiv.style.display = 'block';
             
-            // Auto-cacher après 5 secondes pour les succès, 10 pour les erreurs
             const timeout = type === 'error' ? 10000 : 5000;
             setTimeout(() => {
                 if (alertDiv.style.display === 'block') {
@@ -1144,7 +1233,6 @@
             document.head.appendChild(style);
         }
 
-        // ==================== TOAST NOTIFICATION ====================
         function showToast(message, type = 'info', duration = 3000) {
             const oldToast = document.querySelector('.toast-notification');
             if (oldToast) oldToast.remove();
@@ -1162,8 +1250,6 @@
             
             toast.style.backgroundColor = colors[type] || colors.info;
             toast.textContent = message;
-            
-            // Force reflow
             toast.offsetHeight;
             toast.style.opacity = '1';
             
@@ -1173,7 +1259,6 @@
             }, duration);
         }
 
-        // ==================== DÉCONNEXION ====================
         window.logout = async function() {
             try {
                 await window.supabase.auth.signOut();
@@ -1186,7 +1271,6 @@
             }
         };
 
-        // ==================== GESTION DES CLICS EXTERNES ====================
         document.addEventListener('click', function(e) {
             const dropdown = document.getElementById('user-dropdown');
             const userProfile = document.querySelector('.user-profile');
